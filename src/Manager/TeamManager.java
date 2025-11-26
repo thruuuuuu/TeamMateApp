@@ -2,6 +2,8 @@ package Manager;
 
 import Entity.Participant;
 import Entity.Team;
+import Enums.Game;
+import Enums.Role;
 import Exceptions.*;
 import Threads.*;
 import Main.FormationStatistics;
@@ -13,7 +15,7 @@ public class TeamManager {
     private final List<Participant> participants;
     private final List<Team> formedTeams;
     private final List<Participant> remainingParticipants;
-    private int teamSize = 5; // Default team size
+    private int teamSize = 5;
     private int nextParticipantId = 1000;
 
     public TeamManager() {
@@ -33,6 +35,20 @@ public class TeamManager {
         this.teamSize = size;
     }
 
+    // Check if participant exists by ID
+    public boolean participantExists(String participantId) {
+        return participants.stream()
+                .anyMatch(p -> p.getId().equalsIgnoreCase(participantId));
+    }
+
+    // Get participant by ID
+    public Participant getParticipantById(String participantId) throws ParticipantNotFoundException {
+        return participants.stream()
+                .filter(p -> p.getId().equalsIgnoreCase(participantId))
+                .findFirst()
+                .orElseThrow(() -> new ParticipantNotFoundException("Participant not found: " + participantId));
+    }
+
     public void loadParticipantsFromCSV(String filePath) {
         ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -46,7 +62,6 @@ public class TeamManager {
 
             System.out.println("\n✓ Successfully loaded " + participants.size() + " participants from " + filePath);
 
-            // Update next ID counter
             for (Participant p : participants) {
                 String id = p.getId();
                 if (id.startsWith("P")) {
@@ -56,16 +71,16 @@ public class TeamManager {
                             nextParticipantId = idNum + 1;
                         }
                     } catch (NumberFormatException e) {
-                        // Ignore invalid ID format
+                        // Ignore
                     }
                 }
             }
 
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            System.out.println("✗ Error: " + cause.getMessage());
+            System.out.println("Error: " + cause.getMessage());
         } catch (InterruptedException e) {
-            System.out.println("✗ Error: Loading was interrupted");
+            System.out.println("Error: Loading was interrupted");
             Thread.currentThread().interrupt();
         } finally {
             executor.shutdown();
@@ -81,14 +96,13 @@ public class TeamManager {
         FormationStatistics stats = null;
 
         try {
-            System.out.println("\n⏳ Forming teams...");
+            System.out.println("\n Forming teams...");
 
             int totalParticipants = participants.size();
             List<Team> teams = future.get();
             formedTeams.clear();
             formedTeams.addAll(teams);
 
-            // Calculate remaining participants
             remainingParticipants.clear();
             Set<Participant> assignedParticipants = new HashSet<>();
             for (Team team : formedTeams) {
@@ -131,13 +145,13 @@ public class TeamManager {
         try {
             Boolean success = future.get();
             if (success) {
-                System.out.println("\n✓ Teams saved successfully to " + filePath);
+                System.out.println("\nTeams saved successfully to " + filePath);
             }
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            System.out.println("✗ Error: " + cause.getMessage());
+            System.out.println("Error: " + cause.getMessage());
         } catch (InterruptedException e) {
-            System.out.println("✗ Error: Saving was interrupted");
+            System.out.println("Error: Saving was interrupted");
             Thread.currentThread().interrupt();
         } finally {
             executor.shutdown();
@@ -146,7 +160,7 @@ public class TeamManager {
 
     public void viewAllParticipants() {
         if (participants.isEmpty()) {
-            System.out.println("\n✗ No participants available.");
+            System.out.println("\nNo participants available.");
             return;
         }
 
@@ -161,7 +175,7 @@ public class TeamManager {
 
     public void viewFormedTeams() {
         if (formedTeams.isEmpty()) {
-            System.out.println("\n✗ No teams formed yet. Please form teams first.");
+            System.out.println("\nNo teams formed yet. Please form teams first.");
             return;
         }
 
@@ -173,7 +187,6 @@ public class TeamManager {
             System.out.println(team.toString());
         }
 
-        // Show remaining participants
         if (!remainingParticipants.isEmpty()) {
             System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
             System.out.println("║  REMAINING PARTICIPANTS (" + remainingParticipants.size() + " unassigned)");
@@ -185,29 +198,97 @@ public class TeamManager {
         }
     }
 
-    public void viewParticipantInfo(String name) throws ParticipantNotFoundException {
-        Participant participant = participants.stream()
-                .filter(p -> p.getName().equalsIgnoreCase(name))
-                .findFirst()
-                .orElse(null);
-
-        if (participant == null) {
-            throw new ParticipantNotFoundException("Participant not found: " + name);
-        }
+    public void viewParticipantInfo(String participantId) throws ParticipantNotFoundException {
+        Participant participant = getParticipantById(participantId);
 
         System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
         System.out.println("║  PARTICIPANT INFORMATION");
         System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════════════════╝");
         System.out.println("  " + participant.toString());
 
-        // Check if in a team
         for (Team team : formedTeams) {
             if (team.getMembers().contains(participant)) {
-                System.out.println("\n  ✓ Assigned to Team " + team.getTeamId());
+                System.out.println("\nAssigned to Team " + team.getTeamId());
                 return;
             }
         }
-        System.out.println("\n  ⚠ Not yet assigned to a team");
+        System.out.println("\nNot yet assigned to a team");
+    }
+
+    public void viewParticipantTeamAssignment(String participantId) throws ParticipantNotFoundException {
+        Participant participant = getParticipantById(participantId);
+
+        System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("║  MY TEAM ASSIGNMENT");
+        System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════════════════╝");
+
+        for (Team team : formedTeams) {
+            if (team.getMembers().contains(participant)) {
+                System.out.println("\nYou are assigned to Team " + team.getTeamId());
+                System.out.println("\n" + team.toString());
+                return;
+            }
+        }
+        System.out.println("\nYou have not been assigned to a team yet.");
+        System.out.println("  Teams will be formed by the organizer soon.");
+    }
+
+    // Update methods
+    public void updateParticipantEmail(String participantId, String newEmail) throws ParticipantNotFoundException {
+        Participant participant = getParticipantById(participantId);
+        // Create new participant with updated email
+        Participant updated = new Participant(
+                participant.getId(),
+                participant.getName(),
+                newEmail,
+                participant.getGame().getDisplayName(),
+                participant.getSkillLevel(),
+                participant.getRole().getDisplayName(),
+                participant.getPersonalityScore()
+        );
+        participants.set(participants.indexOf(participant), updated);
+    }
+
+    public void updateParticipantSkill(String participantId, int newSkill) throws ParticipantNotFoundException {
+        Participant participant = getParticipantById(participantId);
+        Participant updated = new Participant(
+                participant.getId(),
+                participant.getName(),
+                participant.getEmail(),
+                participant.getGame().getDisplayName(),
+                newSkill,
+                participant.getRole().getDisplayName(),
+                participant.getPersonalityScore()
+        );
+        participants.set(participants.indexOf(participant), updated);
+    }
+
+    public void updateParticipantGame(String participantId, Game newGame) throws ParticipantNotFoundException {
+        Participant participant = getParticipantById(participantId);
+        Participant updated = new Participant(
+                participant.getId(),
+                participant.getName(),
+                participant.getEmail(),
+                newGame.getDisplayName(),
+                participant.getSkillLevel(),
+                participant.getRole().getDisplayName(),
+                participant.getPersonalityScore()
+        );
+        participants.set(participants.indexOf(participant), updated);
+    }
+
+    public void updateParticipantRole(String participantId, Role newRole) throws ParticipantNotFoundException {
+        Participant participant = getParticipantById(participantId);
+        Participant updated = new Participant(
+                participant.getId(),
+                participant.getName(),
+                participant.getEmail(),
+                participant.getGame().getDisplayName(),
+                participant.getSkillLevel(),
+                newRole.getDisplayName(),
+                participant.getPersonalityScore()
+        );
+        participants.set(participants.indexOf(participant), updated);
     }
 
     public String generateNextParticipantId() {
