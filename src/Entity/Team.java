@@ -1,3 +1,9 @@
+package Entity;
+
+import Enums.Game;
+import Enums.Role;
+import Enums.PersonalityType;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,9 +40,9 @@ public class Team {
                 .orElse(0);
     }
 
-    public boolean hasRole(String role) {
+    public boolean hasRole(Role role) {
         return members.stream()
-                .anyMatch(p -> p.getRole().equals(role));
+                .anyMatch(p -> p.getRole() == role);
     }
 
     public long getRoleDiversity() {
@@ -46,15 +52,15 @@ public class Team {
                 .count();
     }
 
-    public long countGame(String game) {
+    public long countGame(Game game) {
         return members.stream()
-                .filter(p -> p.getGame().equals(game))
+                .filter(p -> p.getGame() == game)
                 .count();
     }
 
-    public boolean hasPersonalityType(String type) {
+    public boolean hasPersonalityType(PersonalityType type) {
         return members.stream()
-                .anyMatch(p -> p.getPersonalityType().equals(type));
+                .anyMatch(p -> p.getPersonalityType() == type);
     }
 
     @Override
