@@ -23,8 +23,19 @@ public class TeamSaverThread implements Callable<Boolean> {
             throw new NoTeamsFormedException("No teams available to save");
         }
 
+        // Create directory if it doesn't exist
+        File file = new File(filePath);
+        File parentDir = file.getParentFile();
+
+        if (parentDir != null && !parentDir.exists()) {
+            boolean created = parentDir.mkdirs();
+            if (!created) {
+                throw new IOException("Failed to create directory: " + parentDir.getPath());
+            }
+        }
+
         try (PrintWriter writer = new PrintWriter(new FileWriter(filePath))) {
-            writer.println("TeamID,ParticipantID,ParticipantName,Email,Enums.Game,SkillLevel,Role,PersonalityScore,Enums.PersonalityType");
+            writer.println("TeamID,ParticipantID,ParticipantName,Email,Game,SkillLevel,Role,PersonalityScore,PersonalityType");
 
             for (Team team : teams) {
                 for (Participant p : team.getMembers()) {

@@ -39,26 +39,7 @@ public class CSVLoaderThread implements Callable<List<Participant>> {
                 }
 
                 try {
-                    String id = data[0].trim();
-                    String name = data[1].trim();
-                    String email = data[2].trim();
-                    String game = data[3].trim();
-                    int skill = Integer.parseInt(data[4].trim());
-                    String role = data[5].trim();
-                    int personalityScore = Integer.parseInt(data[6].trim());
-
-                    // Validate data
-                    if (name.isEmpty()) {
-                        throw new CSVFormatException("Empty name at line " + lineNumber);
-                    }
-                    if (!email.contains("@")) {
-                        throw new InvalidEmailException("Invalid email format at line " + lineNumber + ": " + email);
-                    }
-                    if (skill < 1 || skill > 10) {
-                        throw new InvalidSkillLevelException("Invalid skill level at line " + lineNumber + ": " + skill);
-                    }
-
-                    Participant p = new Participant(id, name, email, game, skill, role, personalityScore);
+                    Participant p = getParticipant(data, lineNumber);
                     participants.add(p);
 
                 } catch (NumberFormatException e) {
@@ -71,5 +52,28 @@ public class CSVLoaderThread implements Callable<List<Participant>> {
         }
 
         return participants;
+    }
+
+    private static Participant getParticipant(String[] data, int lineNumber) throws InvalidEmailException, InvalidSkillLevelException {
+        String id = data[0].trim();
+        String name = data[1].trim();
+        String email = data[2].trim();
+        String game = data[3].trim();
+        int skill = Integer.parseInt(data[4].trim());
+        String role = data[5].trim();
+        int personalityScore = Integer.parseInt(data[6].trim());
+
+        // Validate data
+        if (name.isEmpty()) {
+            throw new CSVFormatException("Empty name at line " + lineNumber);
+        }
+        if (!email.contains("@")) {
+            throw new InvalidEmailException("Invalid email format at line " + lineNumber + ": " + email);
+        }
+        if (skill < 1 || skill > 10) {
+            throw new InvalidSkillLevelException("Invalid skill level at line " + lineNumber + ": " + skill);
+        }
+
+        return new Participant(id, name, email, game, skill, role, personalityScore);
     }
 }
