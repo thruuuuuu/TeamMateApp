@@ -290,8 +290,4 @@ public class TeamManager {
         );
         participants.set(participants.indexOf(participant), updated);
     }
-
-    public String generateNextParticipantId() {
-        return "P" + String.format("%03d", nextParticipantId++);
-    }
 }
