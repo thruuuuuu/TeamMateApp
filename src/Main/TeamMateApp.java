@@ -228,7 +228,6 @@ public class TeamMateApp {
         try {
             System.out.println("\n=== PARTICIPANT SURVEY ===");
 
-            scanner.nextLine(); // Clear buffer
             System.out.print("Enter your name: ");
             String name = scanner.nextLine().trim();
 
@@ -284,7 +283,7 @@ public class TeamMateApp {
             Participant participant = new Participant(name, email, game, skill, role, totalScore);
             teamManager.addParticipant(participant);
 
-            System.out.println("\n✓ Registration completed successfully!");
+            System.out.println("\nRegistration completed successfully!");
             System.out.println("═══════════════════════════════════════");
             System.out.println("Your Participant ID: " + participant.getId());
             System.out.println("IMPORTANT: Save this ID for future login!");
@@ -294,13 +293,10 @@ public class TeamMateApp {
             // Auto-login after registration
             loggedInParticipantId = participant.getId();
 
-            System.out.print("\nPress Enter to continue to your dashboard...");
-            scanner.nextLine();
-
             participantMenu();
 
         } catch (InvalidRatingException | InvalidSkillLevelException | InvalidEmailException e) {
-            System.out.println("✗ Error: " + e.getMessage());
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -308,7 +304,7 @@ public class TeamMateApp {
         try {
             teamManager.viewParticipantInfo(loggedInParticipantId);
         } catch (ParticipantNotFoundException e) {
-            System.out.println("✗ Error: " + e.getMessage());
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -316,7 +312,7 @@ public class TeamMateApp {
         try {
             teamManager.viewParticipantTeamAssignment(loggedInParticipantId);
         } catch (ParticipantNotFoundException e) {
-            System.out.println("✗ Error: " + e.getMessage());
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
@@ -342,7 +338,7 @@ public class TeamMateApp {
                         throw new InvalidEmailException("Invalid email format");
                     }
                     teamManager.updateParticipantEmail(loggedInParticipantId, newEmail);
-                    System.out.println("✓ Email updated successfully!");
+                    System.out.println("Email updated successfully!");
                     break;
                 case 2:
                     System.out.print("Enter new skill level (1-10): ");
@@ -351,7 +347,7 @@ public class TeamMateApp {
                         throw new InvalidSkillLevelException("Skill level must be between 1 and 10");
                     }
                     teamManager.updateParticipantSkill(loggedInParticipantId, newSkill);
-                    System.out.println("✓ Skill level updated successfully!");
+                    System.out.println("Skill level updated successfully!");
                     break;
                 case 3:
                     Game.displayOptions();
@@ -359,7 +355,7 @@ public class TeamMateApp {
                     int gameChoice = getIntInput();
                     Game newGame = Game.fromInt(gameChoice);
                     teamManager.updateParticipantGame(loggedInParticipantId, newGame);
-                    System.out.println("✓ Preferred game updated successfully!");
+                    System.out.println("Preferred game updated successfully!");
                     break;
                 case 4:
                     Role.displayOptions();
@@ -367,7 +363,7 @@ public class TeamMateApp {
                     int roleChoice = getIntInput();
                     Role newRole = Role.fromInt(roleChoice);
                     teamManager.updateParticipantRole(loggedInParticipantId, newRole);
-                    System.out.println("✓ Preferred role updated successfully!");
+                    System.out.println("Preferred role updated successfully!");
                     break;
                 case 5:
                     return;
@@ -375,7 +371,7 @@ public class TeamMateApp {
                     System.out.println("Invalid choice.");
             }
         } catch (ParticipantNotFoundException | InvalidEmailException | InvalidSkillLevelException e) {
-            System.out.println("✗ Error: " + e.getMessage());
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
