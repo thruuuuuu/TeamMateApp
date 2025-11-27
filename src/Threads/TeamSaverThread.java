@@ -19,7 +19,7 @@ public class TeamSaverThread implements Callable<Boolean> {
 
     @Override
     public Boolean call() throws Exception {
-        if (teams.isEmpty()) {
+        if (teams == null || teams.isEmpty()) {
             throw new NoTeamsFormedException("No teams available to save");
         }
 
@@ -35,14 +35,35 @@ public class TeamSaverThread implements Callable<Boolean> {
         }
 
         try (PrintWriter writer = new PrintWriter(new FileWriter(filePath))) {
+            // Write header
             writer.println("TeamID,ParticipantID,ParticipantName,Email,Game,SkillLevel,Role,PersonalityScore,PersonalityType");
 
+            // Write team data
+            int rowCount = 0;
             for (Team team : teams) {
-                for (Participant p : team.getMembers()) {
-                    writer.println(team.getTeamId() + "," + p.toCSVString());
+                if (team != null && team.getMembers() != null) {
+                    for (Participant p : team.getMembers()) {
+                        if (p != null) {
+                            try {
+                                String csvLine = team.getTeamId() + "," + p.toCSVString();
+                                writer.println(csvLine);
+                                rowCount++;
+                            } catch (Exception e) {
+                                System.err.println("Error writing participant " + p.getId() + ": " + e.getMessage());
+                                throw e;
+                            }
+                        }
+                    }
                 }
             }
+
+            writer.flush();
+            System.out.println("Debug: Wrote " + rowCount + " participant records to CSV");
             return true;
+
+        } catch (IOException e) {
+            System.err.println("IO Error while saving teams: " + e.getMessage());
+            throw e;
         }
     }
 }

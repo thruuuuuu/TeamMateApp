@@ -232,7 +232,7 @@ public class TeamMateApp {
             String name = scanner.nextLine().trim();
 
             if (name.isEmpty()) {
-                System.out.println("✗ Error: Name cannot be empty");
+                System.out.println("Error: Name cannot be empty");
                 return;
             }
 

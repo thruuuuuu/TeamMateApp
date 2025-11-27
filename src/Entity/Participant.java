@@ -1,8 +1,8 @@
 package Entity;
 
 import Enums.Game;
-import Enums.PersonalityType;
 import Enums.Role;
+import Enums.PersonalityType;
 
 public class Participant {
     private final String id;
@@ -100,8 +100,15 @@ public class Participant {
     }
 
     public String toCSVString() {
-        return String.format("%s,%s,%s,%d,%s,%d,%s",
-                id, name, email, game.getDisplayName(), skillLevel, role.getDisplayName(),
-                personalityScore, personalityType.getDisplayName());
+        // FIXED: Return proper format with all fields as strings
+        return String.format("%s,%s,%s,%s,%d,%s,%d,%s",
+                id,
+                name,
+                email,
+                game.getDisplayName(),
+                skillLevel,
+                role.getDisplayName(),
+                personalityScore,
+                personalityType.getDisplayName());
     }
 }
