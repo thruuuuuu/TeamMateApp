@@ -8,6 +8,7 @@ import Exceptions.*;
 import Threads.*;
 import Main.FormationStatistics;
 
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -35,18 +36,20 @@ public class TeamManager {
         this.teamSize = size;
     }
 
-    // Check if participant exists by ID
     public boolean participantExists(String participantId) {
         return participants.stream()
                 .anyMatch(p -> p.getId().equalsIgnoreCase(participantId));
     }
 
-    // Get participant by ID
     public Participant getParticipantById(String participantId) throws ParticipantNotFoundException {
         return participants.stream()
                 .filter(p -> p.getId().equalsIgnoreCase(participantId))
                 .findFirst()
                 .orElseThrow(() -> new ParticipantNotFoundException("Participant not found: " + participantId));
+    }
+
+    public boolean hasRemainingParticipants() {
+        return !remainingParticipants.isEmpty();
     }
 
     public void loadParticipantsFromCSV(String filePath) {
@@ -78,12 +81,75 @@ public class TeamManager {
 
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            System.out.println("Error: " + cause.getMessage());
+            System.out.println("✗ Error: " + cause.getMessage());
         } catch (InterruptedException e) {
-            System.out.println("Error: Loading was interrupted");
+            System.out.println("✗ Error: Loading was interrupted");
             Thread.currentThread().interrupt();
         } finally {
             executor.shutdown();
+        }
+    }
+
+    public void loadTeamFormationFromCSV(String filePath) {
+        System.out.println("\n⏳ Loading team formation...");
+
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            boolean isHeader = true;
+
+            // Clear existing data
+            formedTeams.clear();
+            remainingParticipants.clear();
+            participants.clear();
+
+            Map<Integer, Team> teamMap = new HashMap<>();
+
+            while ((line = br.readLine()) != null) {
+                if (isHeader) {
+                    isHeader = false;
+                    continue;
+                }
+
+                String[] data = line.split(",");
+                if (data.length >= 9) {
+                    int teamId = Integer.parseInt(data[0].trim());
+                    String id = data[1].trim();
+                    String name = data[2].trim();
+                    String email = data[3].trim();
+                    String game = data[4].trim();
+                    int skill = Integer.parseInt(data[5].trim());
+                    String role = data[6].trim();
+                    int personalityScore = Integer.parseInt(data[7].trim());
+
+                    Participant p = new Participant(id, name, email, game, skill, role, personalityScore);
+                    participants.add(p);
+
+                    // TeamID 0 means remaining/unassigned participant
+                    if (teamId == 0) {
+                        remainingParticipants.add(p);
+                    } else {
+                        // Add to team
+                        Team team = teamMap.computeIfAbsent(teamId, Team::new);
+                        team.addMember(p);
+                    }
+                }
+            }
+
+            // Add all teams to formedTeams list (sorted by team ID)
+            formedTeams.addAll(teamMap.values());
+            formedTeams.sort(Comparator.comparingInt(Team::getTeamId));
+
+            System.out.println("✓ Successfully loaded team formation from " + filePath);
+            System.out.println("  Teams loaded: " + formedTeams.size());
+            System.out.println("  Total participants: " + participants.size());
+            System.out.println("  Remaining participants: " + remainingParticipants.size());
+
+        } catch (FileNotFoundException e) {
+            System.out.println("✗ Error: File not found - " + filePath);
+        } catch (IOException e) {
+            System.out.println("✗ Error reading file: " + e.getMessage());
+        } catch (NumberFormatException e) {
+            System.out.println("✗ Error: Invalid number format in CSV");
         }
     }
 
@@ -96,7 +162,7 @@ public class TeamManager {
         FormationStatistics stats = null;
 
         try {
-            System.out.println("\n Forming teams...");
+            System.out.println("\n⏳ Forming teams...");
 
             int totalParticipants = participants.size();
             List<Team> teams = future.get();
@@ -145,22 +211,42 @@ public class TeamManager {
         try {
             Boolean success = future.get();
             if (success) {
-                System.out.println("\nTeams saved successfully to " + filePath);
+                System.out.println("\n✓ Teams saved successfully to " + filePath);
             }
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            System.out.println("Error: " + cause.getMessage());
+            System.out.println("✗ Error: " + cause.getMessage());
         } catch (InterruptedException e) {
-            System.out.println("Error: Saving was interrupted");
+            System.out.println("✗ Error: Saving was interrupted");
             Thread.currentThread().interrupt();
         } finally {
             executor.shutdown();
         }
     }
 
+    public void appendRemainingParticipantsToCSV(String filePath) {
+        if (remainingParticipants.isEmpty()) {
+            System.out.println("\n⚠ No remaining participants to save.");
+            return;
+        }
+
+        try (FileWriter fw = new FileWriter(filePath, true);
+             PrintWriter writer = new PrintWriter(fw)) {
+
+            for (Participant p : remainingParticipants) {
+                writer.println("0," + p.toCSVString());
+            }
+
+            System.out.println("✓ Saved " + remainingParticipants.size() + " remaining participants with TeamID=0");
+
+        } catch (IOException e) {
+            System.out.println("✗ Error appending remaining participants: " + e.getMessage());
+        }
+    }
+
     public void viewAllParticipants() {
         if (participants.isEmpty()) {
-            System.out.println("\nNo participants available.");
+            System.out.println("\n✗ No participants available.");
             return;
         }
 
@@ -175,7 +261,7 @@ public class TeamManager {
 
     public void viewFormedTeams() {
         if (formedTeams.isEmpty()) {
-            System.out.println("\nNo teams formed yet. Please form teams first.");
+            System.out.println("\n✗ No teams formed yet. Please form teams first.");
             return;
         }
 
@@ -186,15 +272,20 @@ public class TeamManager {
         for (Team team : formedTeams) {
             System.out.println(team.toString());
         }
+    }
 
-        if (!remainingParticipants.isEmpty()) {
-            System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
-            System.out.println("║  REMAINING PARTICIPANTS (" + remainingParticipants.size() + " unassigned)");
-            System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════════════════╝");
+    public void viewRemainingParticipants() {
+        if (remainingParticipants.isEmpty()) {
+            System.out.println("\n✓ No remaining participants. All participants have been assigned to teams!");
+            return;
+        }
 
-            for (Participant p : remainingParticipants) {
-                System.out.println("  " + p.toString());
-            }
+        System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("║  REMAINING PARTICIPANTS (" + remainingParticipants.size() + " unassigned)");
+        System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════════════════╝");
+
+        for (Participant p : remainingParticipants) {
+            System.out.println("  " + p.toString());
         }
     }
 
@@ -208,11 +299,16 @@ public class TeamManager {
 
         for (Team team : formedTeams) {
             if (team.getMembers().contains(participant)) {
-                System.out.println("\nAssigned to Team " + team.getTeamId());
+                System.out.println("\n  ✓ Assigned to Team " + team.getTeamId());
                 return;
             }
         }
-        System.out.println("\nNot yet assigned to a team");
+
+        if (remainingParticipants.contains(participant)) {
+            System.out.println("\n  ⚠ Remaining participant (not assigned to any team)");
+        } else {
+            System.out.println("\n  ⚠ Not yet assigned to a team");
+        }
     }
 
     public void viewParticipantTeamAssignment(String participantId) throws ParticipantNotFoundException {
@@ -224,19 +320,23 @@ public class TeamManager {
 
         for (Team team : formedTeams) {
             if (team.getMembers().contains(participant)) {
-                System.out.println("\nYou are assigned to Team " + team.getTeamId());
+                System.out.println("\n✓ You are assigned to Team " + team.getTeamId());
                 System.out.println("\n" + team.toString());
                 return;
             }
         }
-        System.out.println("\nYou have not been assigned to a team yet.");
-        System.out.println("  Teams will be formed by the organizer soon.");
+
+        if (remainingParticipants.contains(participant)) {
+            System.out.println("\n⚠ You are in the remaining participants pool.");
+            System.out.println("  You were not assigned to a team in the current formation.");
+        } else {
+            System.out.println("\n⚠ You have not been assigned to a team yet.");
+            System.out.println("  Teams will be formed by the organizer soon.");
+        }
     }
 
-    // Update methods
     public void updateParticipantEmail(String participantId, String newEmail) throws ParticipantNotFoundException {
         Participant participant = getParticipantById(participantId);
-        // Create new participant with updated email
         Participant updated = new Participant(
                 participant.getId(),
                 participant.getName(),

@@ -13,7 +13,7 @@ import java.time.format.DateTimeFormatter;
 public class TeamMateApp {
     private static final Scanner scanner = new Scanner(System.in);
     private static final TeamManager teamManager = new TeamManager();
-    private static String loggedInParticipantId = null; // Store logged in participant ID
+    private static String loggedInParticipantId = null;
 
     public static void main(String[] args) {
         System.out.println("╔════════════════════════════════════════╗");
@@ -50,11 +50,13 @@ public class TeamMateApp {
             System.out.println("\n╔════════════════════════════════════════╗");
             System.out.println("║         ORGANIZER MENU                 ║");
             System.out.println("╚════════════════════════════════════════╝");
-            System.out.println("1. Upload CSV Data");
+            System.out.println("1. Upload Participants CSV");
             System.out.println("2. Form Teams");
-            System.out.println("3. View All Participants");
-            System.out.println("4. View Formed Teams");
-            System.out.println("5. Back to Main Menu");
+            System.out.println("3. Load Previous Team Formation");
+            System.out.println("4. View All Participants");
+            System.out.println("5. View Formed Teams");
+            System.out.println("6. View Remaining Participants");
+            System.out.println("7. Back to Main Menu");
             System.out.print("Enter choice: ");
 
             int choice = getIntInput();
@@ -67,12 +69,18 @@ public class TeamMateApp {
                     formTeamsWithOptions();
                     break;
                 case 3:
-                    teamManager.viewAllParticipants();
+                    loadPreviousTeamFormation();
                     break;
                 case 4:
-                    teamManager.viewFormedTeams();
+                    teamManager.viewAllParticipants();
                     break;
                 case 5:
+                    teamManager.viewFormedTeams();
+                    break;
+                case 6:
+                    teamManager.viewRemainingParticipants();
+                    break;
+                case 7:
                     return;
                 default:
                     System.out.println("Invalid choice. Please try again.");
@@ -85,16 +93,15 @@ public class TeamMateApp {
         System.out.println("║       PARTICIPANT LOGIN                ║");
         System.out.println("╚════════════════════════════════════════╝");
 
-        scanner.nextLine(); // Clear buffer
+        scanner.nextLine();
 
-        // Option to register new or login existing
         System.out.println("1. Login with Existing ID");
         System.out.println("2. Register as New Participant");
         System.out.println("3. Back to Main Menu");
         System.out.print("Enter choice: ");
 
         int choice = getIntInput();
-        scanner.nextLine(); // Clear buffer
+        scanner.nextLine();
 
         switch (choice) {
             case 1:
@@ -115,7 +122,6 @@ public class TeamMateApp {
         String participantId = scanner.nextLine().trim().toUpperCase();
 
         try {
-            // Verify if participant exists
             if (teamManager.participantExists(participantId)) {
                 loggedInParticipantId = participantId;
                 Participant participant = teamManager.getParticipantById(participantId);
@@ -141,7 +147,7 @@ public class TeamMateApp {
         while (true) {
             System.out.println("\n╔════════════════════════════════════════╗");
             System.out.println("║         PARTICIPANT MENU               ║");
-            System.out.println("║         (Logged in as: " + loggedInParticipantId + ")           ║");
+            System.out.println("║         (Logged in as: " + loggedInParticipantId + ")      ║");
             System.out.println("╚════════════════════════════════════════╝");
             System.out.println("1. View My Information");
             System.out.println("2. View My Team Assignment");
@@ -177,13 +183,26 @@ public class TeamMateApp {
 
     private static void uploadCSV() {
         System.out.print("\nEnter CSV file path (or press Enter for default 'participants.csv'): ");
-        scanner.nextLine(); // Clear buffer
+        scanner.nextLine();
         String filePath = scanner.nextLine().trim();
         if (filePath.isEmpty()) {
             filePath = "participants.csv";
         }
 
         teamManager.loadParticipantsFromCSV(filePath);
+    }
+
+    private static void loadPreviousTeamFormation() {
+        System.out.print("\nEnter team formation CSV file path: ");
+        scanner.nextLine();
+        String filePath = scanner.nextLine().trim();
+
+        if (filePath.isEmpty()) {
+            System.out.println("✗ Error: File path cannot be empty.");
+            return;
+        }
+
+        teamManager.loadTeamFormationFromCSV(filePath);
     }
 
     private static void formTeamsWithOptions() {
@@ -200,7 +219,7 @@ public class TeamMateApp {
             }
 
             System.out.print("\nDo you want to save the teams to CSV? (Y/N): ");
-            scanner.nextLine(); // Clear buffer
+            scanner.nextLine();
             String saveChoice = scanner.nextLine().trim().toUpperCase();
 
             if (saveChoice.equals("Y") || saveChoice.equals("YES")) {
@@ -215,6 +234,16 @@ public class TeamMateApp {
                 }
 
                 teamManager.saveTeamsToCSV(filePath);
+
+                // Ask if user wants to save remaining participants
+                if (teamManager.hasRemainingParticipants()) {
+                    System.out.print("\nSave remaining participants to the same file? (Y/N): ");
+                    String saveRemaining = scanner.nextLine().trim().toUpperCase();
+
+                    if (saveRemaining.equals("Y") || saveRemaining.equals("YES")) {
+                        teamManager.appendRemainingParticipantsToCSV(filePath);
+                    }
+                }
             } else {
                 System.out.println("Teams not saved.");
             }
@@ -226,13 +255,13 @@ public class TeamMateApp {
 
     private static void completeSurvey() {
         try {
-            System.out.println("\n=== PARTICIPANT SURVEY ===");
+            System.out.println("\n=== PARTICIPANT SURVEY ===\n");
 
             System.out.print("Enter your name: ");
             String name = scanner.nextLine().trim();
 
             if (name.isEmpty()) {
-                System.out.println("Error: Name cannot be empty");
+                System.out.println("✗ Error: Name cannot be empty");
                 return;
             }
 
@@ -283,20 +312,22 @@ public class TeamMateApp {
             Participant participant = new Participant(name, email, game, skill, role, totalScore);
             teamManager.addParticipant(participant);
 
-            System.out.println("\nRegistration completed successfully!");
+            System.out.println("\n✓ Registration completed successfully!");
             System.out.println("═══════════════════════════════════════");
             System.out.println("Your Participant ID: " + participant.getId());
             System.out.println("IMPORTANT: Save this ID for future login!");
             System.out.println("═══════════════════════════════════════");
             System.out.println("Your personality type: " + participant.getPersonalityType().getDisplayName());
 
-            // Auto-login after registration
             loggedInParticipantId = participant.getId();
+
+            System.out.print("\nPress Enter to continue to your dashboard...");
+            scanner.nextLine();
 
             participantMenu();
 
         } catch (InvalidRatingException | InvalidSkillLevelException | InvalidEmailException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("✗ Error: " + e.getMessage());
         }
     }
 
@@ -304,7 +335,7 @@ public class TeamMateApp {
         try {
             teamManager.viewParticipantInfo(loggedInParticipantId);
         } catch (ParticipantNotFoundException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("✗ Error: " + e.getMessage());
         }
     }
 
@@ -312,7 +343,7 @@ public class TeamMateApp {
         try {
             teamManager.viewParticipantTeamAssignment(loggedInParticipantId);
         } catch (ParticipantNotFoundException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("✗ Error: " + e.getMessage());
         }
     }
 
@@ -327,7 +358,7 @@ public class TeamMateApp {
         System.out.print("Enter choice: ");
 
         int choice = getIntInput();
-        scanner.nextLine(); // Clear buffer
+        scanner.nextLine();
 
         try {
             switch (choice) {
@@ -338,7 +369,7 @@ public class TeamMateApp {
                         throw new InvalidEmailException("Invalid email format");
                     }
                     teamManager.updateParticipantEmail(loggedInParticipantId, newEmail);
-                    System.out.println("Email updated successfully!");
+                    System.out.println("✓ Email updated successfully!");
                     break;
                 case 2:
                     System.out.print("Enter new skill level (1-10): ");
@@ -347,7 +378,7 @@ public class TeamMateApp {
                         throw new InvalidSkillLevelException("Skill level must be between 1 and 10");
                     }
                     teamManager.updateParticipantSkill(loggedInParticipantId, newSkill);
-                    System.out.println("Skill level updated successfully!");
+                    System.out.println("✓ Skill level updated successfully!");
                     break;
                 case 3:
                     Game.displayOptions();
@@ -355,7 +386,7 @@ public class TeamMateApp {
                     int gameChoice = getIntInput();
                     Game newGame = Game.fromInt(gameChoice);
                     teamManager.updateParticipantGame(loggedInParticipantId, newGame);
-                    System.out.println("Preferred game updated successfully!");
+                    System.out.println("✓ Preferred game updated successfully!");
                     break;
                 case 4:
                     Role.displayOptions();
@@ -363,7 +394,7 @@ public class TeamMateApp {
                     int roleChoice = getIntInput();
                     Role newRole = Role.fromInt(roleChoice);
                     teamManager.updateParticipantRole(loggedInParticipantId, newRole);
-                    System.out.println("Preferred role updated successfully!");
+                    System.out.println("✓ Preferred role updated successfully!");
                     break;
                 case 5:
                     return;
@@ -371,7 +402,7 @@ public class TeamMateApp {
                     System.out.println("Invalid choice.");
             }
         } catch (ParticipantNotFoundException | InvalidEmailException | InvalidSkillLevelException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("✗ Error: " + e.getMessage());
         }
     }
 
@@ -402,6 +433,6 @@ public class TeamMateApp {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
         String timestamp = now.format(formatter);
-        return "TeamFormations/" + teamSize + "_" + timestamp + ".csv";
+        return "TeamFormations/teamSize" + teamSize + "_" + timestamp + ".csv";
     }
 }
