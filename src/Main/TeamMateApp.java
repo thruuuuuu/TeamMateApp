@@ -50,7 +50,7 @@ public class TeamMateApp {
             System.out.println("\n╔════════════════════════════════════════╗");
             System.out.println("║         ORGANIZER MENU                 ║");
             System.out.println("╚════════════════════════════════════════╝");
-            System.out.println("1. Upload Participants CSV");
+            System.out.println("1. Upload Participants from CSV");
             System.out.println("2. Form Teams");
             System.out.println("3. Load Previous Team Formation");
             System.out.println("4. View All Participants");
@@ -151,9 +151,8 @@ public class TeamMateApp {
             System.out.println("╚════════════════════════════════════════╝");
             System.out.println("1. View My Information");
             System.out.println("2. View My Team Assignment");
-            System.out.println("3. View All Formed Teams");
-            System.out.println("4. Update My Profile");
-            System.out.println("5. Logout");
+            System.out.println("3. Update My Profile");
+            System.out.println("4. Logout");
             System.out.print("Enter choice: ");
 
             int choice = getIntInput();
@@ -166,12 +165,9 @@ public class TeamMateApp {
                     viewMyTeamAssignment();
                     break;
                 case 3:
-                    teamManager.viewFormedTeams();
-                    break;
-                case 4:
                     updateMyProfile();
                     break;
-                case 5:
+                case 4:
                     System.out.println("\n✓ Logged out successfully!");
                     loggedInParticipantId = null;
                     return;
