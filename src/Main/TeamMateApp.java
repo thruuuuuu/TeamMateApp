@@ -4,6 +4,7 @@ import Entity.Participant;
 import Enums.Game;
 import Enums.Role;
 import Exceptions.*;
+import Log.Logger;
 import Manager.TeamManager;
 
 import java.util.Scanner;
@@ -16,6 +17,9 @@ public class TeamMateApp {
     private static String loggedInParticipantId = null;
 
     public static void main(String[] args) {
+        Logger.info("=== TeamMate System Started ===");
+        Logger.logSystemEvent("Application initialized");
+
         System.out.println("╔════════════════════════════════════════╗");
         System.out.println("║   Welcome to TeamMate Formation System ║");
         System.out.println("╚════════════════════════════════════════╝");
@@ -26,31 +30,40 @@ public class TeamMateApp {
             System.out.println("2. Participant");
             System.out.println("3. Exit");
             System.out.print("Enter choice: ");
+
             int choice = getIntInput();
+            Logger.debug("User selected main menu option: " + choice);
 
             switch (choice) {
                 case 1:
+                    Logger.info("Organizer mode selected");
                     organizerMenu();
                     break;
                 case 2:
+                    Logger.info("Participant mode selected");
                     participantLogin();
                     break;
                 case 3:
+                    Logger.info("User exiting application");
                     System.out.println("\nThank you for using TeamMate!");
+                    Logger.logSystemEvent("Application shutdown");
                     scanner.close();
                     System.exit(0);
                 default:
+                    Logger.warning("Invalid main menu choice: " + choice);
                     System.out.println("Invalid choice. Please try again.");
             }
         }
     }
 
     private static void organizerMenu() {
+        Logger.info("Entered Organizer Menu");
+
         while (true) {
             System.out.println("\n╔════════════════════════════════════════╗");
             System.out.println("║         ORGANIZER MENU                 ║");
             System.out.println("╚════════════════════════════════════════╝");
-            System.out.println("1. Upload Participants from CSV");
+            System.out.println("1. Upload Participants CSV");
             System.out.println("2. Form Teams");
             System.out.println("3. Load Previous Team Formation");
             System.out.println("4. View All Participants");
@@ -60,6 +73,7 @@ public class TeamMateApp {
             System.out.print("Enter choice: ");
 
             int choice = getIntInput();
+            Logger.debug("Organizer menu choice: " + choice);
 
             switch (choice) {
                 case 1:
@@ -72,23 +86,30 @@ public class TeamMateApp {
                     loadPreviousTeamFormation();
                     break;
                 case 4:
+                    Logger.logUserAction("Organizer", "Viewed all participants");
                     teamManager.viewAllParticipants();
                     break;
                 case 5:
+                    Logger.logUserAction("Organizer", "Viewed formed teams");
                     teamManager.viewFormedTeams();
                     break;
                 case 6:
+                    Logger.logUserAction("Organizer", "Viewed remaining participants");
                     teamManager.viewRemainingParticipants();
                     break;
                 case 7:
+                    Logger.info("Exiting Organizer Menu");
                     return;
                 default:
+                    Logger.warning("Invalid organizer menu choice: " + choice);
                     System.out.println("Invalid choice. Please try again.");
             }
         }
     }
 
     private static void participantLogin() {
+        Logger.info("Participant login initiated");
+
         System.out.println("\n╔════════════════════════════════════════╗");
         System.out.println("║       PARTICIPANT LOGIN                ║");
         System.out.println("╚════════════════════════════════════════╝");
@@ -103,6 +124,8 @@ public class TeamMateApp {
         int choice = getIntInput();
         scanner.nextLine();
 
+        Logger.debug("Participant login option: " + choice);
+
         switch (choice) {
             case 1:
                 loginExistingParticipant();
@@ -111,8 +134,10 @@ public class TeamMateApp {
                 registerNewParticipant();
                 break;
             case 3:
+                Logger.info("Returned to main menu from login");
                 return;
             default:
+                Logger.warning("Invalid login choice: " + choice);
                 System.out.println("Invalid choice.");
         }
     }
@@ -120,6 +145,8 @@ public class TeamMateApp {
     private static void loginExistingParticipant() {
         System.out.print("\nEnter your Participant ID (e.g., P001): ");
         String participantId = scanner.nextLine().trim().toUpperCase();
+
+        Logger.info("Login attempt for participant ID: " + participantId);
 
         try {
             if (teamManager.participantExists(participantId)) {
@@ -129,21 +156,28 @@ public class TeamMateApp {
                 System.out.println("\n✓ Login successful!");
                 System.out.println("Welcome, " + participant.getName() + "!");
 
+                Logger.logUserAction(participantId, "Logged in successfully");
+
                 participantMenu();
             } else {
+                Logger.warning("Failed login attempt - ID not found: " + participantId);
                 System.out.println("\n✗ Error: Participant ID not found. Please check your ID or register as new participant.");
             }
         } catch (ParticipantNotFoundException e) {
+            Logger.error("Login error for ID: " + participantId, e);
             System.out.println("✗ Error: " + e.getMessage());
         }
     }
 
     private static void registerNewParticipant() {
+        Logger.info("New participant registration started");
         System.out.println("\n=== NEW PARTICIPANT REGISTRATION ===");
         completeSurvey();
     }
 
     private static void participantMenu() {
+        Logger.info("Participant " + loggedInParticipantId + " entered participant menu");
+
         while (true) {
             System.out.println("\n╔════════════════════════════════════════╗");
             System.out.println("║         PARTICIPANT MENU               ║");
@@ -151,27 +185,37 @@ public class TeamMateApp {
             System.out.println("╚════════════════════════════════════════╝");
             System.out.println("1. View My Information");
             System.out.println("2. View My Team Assignment");
-            System.out.println("3. Update My Profile");
-            System.out.println("4. Logout");
+            System.out.println("3. View All Formed Teams");
+            System.out.println("4. Update My Profile");
+            System.out.println("5. Logout");
             System.out.print("Enter choice: ");
 
             int choice = getIntInput();
+            Logger.debug("Participant " + loggedInParticipantId + " menu choice: " + choice);
 
             switch (choice) {
                 case 1:
+                    Logger.logUserAction(loggedInParticipantId, "Viewed own information");
                     viewMyInfo();
                     break;
                 case 2:
+                    Logger.logUserAction(loggedInParticipantId, "Viewed team assignment");
                     viewMyTeamAssignment();
                     break;
                 case 3:
-                    updateMyProfile();
+                    Logger.logUserAction(loggedInParticipantId, "Viewed all formed teams");
+                    teamManager.viewFormedTeams();
                     break;
                 case 4:
+                    updateMyProfile();
+                    break;
+                case 5:
+                    Logger.logUserAction(loggedInParticipantId, "Logged out");
                     System.out.println("\n✓ Logged out successfully!");
                     loggedInParticipantId = null;
                     return;
                 default:
+                    Logger.warning("Invalid participant menu choice: " + choice);
                     System.out.println("Invalid choice. Please try again.");
             }
         }
@@ -185,6 +229,7 @@ public class TeamMateApp {
             filePath = "participants.csv";
         }
 
+        Logger.info("Organizer uploading CSV: " + filePath);
         teamManager.loadParticipantsFromCSV(filePath);
     }
 
@@ -194,10 +239,12 @@ public class TeamMateApp {
         String filePath = scanner.nextLine().trim();
 
         if (filePath.isEmpty()) {
+            Logger.warning("Empty file path provided for loading formation");
             System.out.println("✗ Error: File path cannot be empty.");
             return;
         }
 
+        Logger.info("Loading previous formation from: " + filePath);
         teamManager.loadTeamFormationFromCSV(filePath);
     }
 
@@ -205,9 +252,12 @@ public class TeamMateApp {
         try {
             System.out.print("\nEnter team size (3-10): ");
             int size = getIntInput();
+
+            Logger.info("Setting team size to: " + size);
             teamManager.setTeamSize(size);
             System.out.println("Team size set to: " + size);
 
+            Logger.info("Starting team formation process");
             FormationStatistics stats = teamManager.formTeams();
 
             if (stats != null) {
@@ -229,22 +279,25 @@ public class TeamMateApp {
                     filePath = autoFileName;
                 }
 
+                Logger.info("Saving teams to: " + filePath);
                 teamManager.saveTeamsToCSV(filePath);
 
-                // Ask if user wants to save remaining participants
                 if (teamManager.hasRemainingParticipants()) {
                     System.out.print("\nSave remaining participants to the same file? (Y/N): ");
                     String saveRemaining = scanner.nextLine().trim().toUpperCase();
 
                     if (saveRemaining.equals("Y") || saveRemaining.equals("YES")) {
+                        Logger.info("Appending remaining participants to: " + filePath);
                         teamManager.appendRemainingParticipantsToCSV(filePath);
                     }
                 }
             } else {
+                Logger.info("Teams not saved - user declined");
                 System.out.println("Teams not saved.");
             }
 
         } catch (InvalidTeamSizeException e) {
+            Logger.error("Invalid team size provided", e);
             System.out.println("✗ Error: " + e.getMessage());
         }
     }
@@ -257,6 +310,7 @@ public class TeamMateApp {
             String name = scanner.nextLine().trim();
 
             if (name.isEmpty()) {
+                Logger.warning("Empty name provided in survey");
                 System.out.println("✗ Error: Name cannot be empty");
                 return;
             }
@@ -308,6 +362,9 @@ public class TeamMateApp {
             Participant participant = new Participant(name, email, game, skill, role, totalScore);
             teamManager.addParticipant(participant);
 
+            Logger.info("New participant registered: " + participant.getId() + " - " + name);
+            Logger.logUserAction(participant.getId(), "Completed registration survey");
+
             System.out.println("\n✓ Registration completed successfully!");
             System.out.println("═══════════════════════════════════════");
             System.out.println("Your Participant ID: " + participant.getId());
@@ -323,6 +380,7 @@ public class TeamMateApp {
             participantMenu();
 
         } catch (InvalidRatingException | InvalidSkillLevelException | InvalidEmailException e) {
+            Logger.error("Survey completion error", e);
             System.out.println("✗ Error: " + e.getMessage());
         }
     }
@@ -331,6 +389,7 @@ public class TeamMateApp {
         try {
             teamManager.viewParticipantInfo(loggedInParticipantId);
         } catch (ParticipantNotFoundException e) {
+            Logger.error("Error viewing participant info", e);
             System.out.println("✗ Error: " + e.getMessage());
         }
     }
@@ -339,11 +398,14 @@ public class TeamMateApp {
         try {
             teamManager.viewParticipantTeamAssignment(loggedInParticipantId);
         } catch (ParticipantNotFoundException e) {
+            Logger.error("Error viewing team assignment", e);
             System.out.println("✗ Error: " + e.getMessage());
         }
     }
 
     private static void updateMyProfile() {
+        Logger.logUserAction(loggedInParticipantId, "Started profile update");
+
         System.out.println("\n=== UPDATE PROFILE ===");
         System.out.println("What would you like to update?");
         System.out.println("1. Email");
@@ -365,6 +427,7 @@ public class TeamMateApp {
                         throw new InvalidEmailException("Invalid email format");
                     }
                     teamManager.updateParticipantEmail(loggedInParticipantId, newEmail);
+                    Logger.logUserAction(loggedInParticipantId, "Updated email to: " + newEmail);
                     System.out.println("✓ Email updated successfully!");
                     break;
                 case 2:
@@ -374,6 +437,7 @@ public class TeamMateApp {
                         throw new InvalidSkillLevelException("Skill level must be between 1 and 10");
                     }
                     teamManager.updateParticipantSkill(loggedInParticipantId, newSkill);
+                    Logger.logUserAction(loggedInParticipantId, "Updated skill level to: " + newSkill);
                     System.out.println("✓ Skill level updated successfully!");
                     break;
                 case 3:
@@ -382,6 +446,7 @@ public class TeamMateApp {
                     int gameChoice = getIntInput();
                     Game newGame = Game.fromInt(gameChoice);
                     teamManager.updateParticipantGame(loggedInParticipantId, newGame);
+                    Logger.logUserAction(loggedInParticipantId, "Updated game to: " + newGame.getDisplayName());
                     System.out.println("✓ Preferred game updated successfully!");
                     break;
                 case 4:
@@ -390,20 +455,25 @@ public class TeamMateApp {
                     int roleChoice = getIntInput();
                     Role newRole = Role.fromInt(roleChoice);
                     teamManager.updateParticipantRole(loggedInParticipantId, newRole);
+                    Logger.logUserAction(loggedInParticipantId, "Updated role to: " + newRole.getDisplayName());
                     System.out.println("✓ Preferred role updated successfully!");
                     break;
                 case 5:
+                    Logger.debug("Profile update cancelled");
                     return;
                 default:
+                    Logger.warning("Invalid profile update choice: " + choice);
                     System.out.println("Invalid choice.");
             }
         } catch (ParticipantNotFoundException | InvalidEmailException | InvalidSkillLevelException e) {
+            Logger.error("Profile update error for " + loggedInParticipantId, e);
             System.out.println("✗ Error: " + e.getMessage());
         }
     }
 
     private static int getIntInput() {
         while (!scanner.hasNextInt()) {
+            Logger.warning("Invalid integer input received");
             System.out.print("Invalid input. Please enter a number: ");
             scanner.next();
         }
@@ -415,6 +485,7 @@ public class TeamMateApp {
         int rating = getIntInput();
 
         if (rating < 1 || rating > 5) {
+            Logger.warning("Invalid rating provided: " + rating);
             throw new InvalidRatingException("Rating must be between 1 and 5. You entered: " + rating);
         }
 
@@ -429,6 +500,6 @@ public class TeamMateApp {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
         String timestamp = now.format(formatter);
-        return "TeamFormations/teamSize" + teamSize + "_" + timestamp + ".csv";
+        return "TeamFormations/teamsSize" + teamSize + "_" + timestamp + ".csv";
     }
 }
