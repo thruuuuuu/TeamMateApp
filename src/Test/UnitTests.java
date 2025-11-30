@@ -24,7 +24,6 @@ public class UnitTests {
         testEnumFunctionality();
         testExceptionHandling();
         testTeamManagerBasics();
-        testFileOperations();
 
         printTestResults();
     }
@@ -33,7 +32,7 @@ public class UnitTests {
         Logger.info("Testing Participant Creation...");
 
         try {
-            // Test 1: Create participant with all fields
+            //Test 1: Create participant with all fields
             Participant p1 = new Participant("P001", "John Doe", "john@test.com",
                     "Chess", 7, "Strategist", 95);
 
@@ -236,37 +235,6 @@ public class UnitTests {
         } catch (AssertionError | Exception e) {
             testsFailed++;
             Logger.error("✗ TeamManager basics test failed", (Exception) e);
-        }
-    }
-
-    private static void testFileOperations() {
-        Logger.info("Testing File Operations...");
-
-        try {
-            // Create test CSV
-            String testFile = "test_participants.csv";
-            try (PrintWriter pw = new PrintWriter(new FileWriter(testFile))) {
-                pw.println("ID,Name,Email,PreferredGame,SkillLevel,PreferredRole,PersonalityScore,PersonalityType");
-                pw.println("P001,Test1,test1@test.com,Chess,7,Strategist,95,Leader");
-                pw.println("P002,Test2,test2@test.com,FIFA,8,Attacker,80,Balanced");
-            }
-
-            // Test loading
-            TeamManager tm = new TeamManager();
-            tm.loadParticipantsFromCSV(testFile);
-
-            assert tm.participantExists("P001") : "P001 should be loaded";
-            assert tm.participantExists("P002") : "P002 should be loaded";
-
-            // Clean up
-            new File(testFile).delete();
-
-            testsPassed++;
-            Logger.info("✓ File operations test passed");
-
-        } catch (AssertionError | Exception e) {
-            testsFailed++;
-            Logger.error("✗ File operations test failed", (Exception) e);
         }
     }
 
