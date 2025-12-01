@@ -115,7 +115,7 @@ public class TeamManager {
 
     public void loadTeamFormationFromCSV(String filePath) {
         Logger.info("Loading team formation from CSV: " + filePath);
-        System.out.println("\n⏳ Loading team formation...");
+        System.out.println("\nLoading team formation...");
 
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
@@ -203,7 +203,7 @@ public class TeamManager {
         FormationStatistics stats = null;
 
         try {
-            System.out.println("\n⏳ Forming teams...");
+            System.out.println("\nForming teams...");
 
             int totalParticipants = participants.size();
             Logger.debug("Total participants for team formation: " + totalParticipants);
