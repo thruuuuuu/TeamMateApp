@@ -31,10 +31,6 @@ public class Logger {
         String timestamp = LocalDateTime.now().format(formatter);
         String logEntry = String.format("[%s] [%s] %s%n", timestamp, level, message);
 
-        // Write to console
-        System.out.print(logEntry);
-
-        // Write to file
         try (FileWriter fw = new FileWriter(LOG_FILE, true);
              PrintWriter pw = new PrintWriter(fw)) {
             pw.print(logEntry);
