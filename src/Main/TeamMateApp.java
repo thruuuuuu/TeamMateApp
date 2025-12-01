@@ -20,9 +20,9 @@ public class TeamMateApp {
         Logger.info("=== TeamMate System Started ===");
         Logger.logSystemEvent("Application initialized");
 
-        System.out.println("╔════════════════════════════════════════╗");
-        System.out.println("║   Welcome to TeamMate Formation System ║");
-        System.out.println("╚════════════════════════════════════════╝");
+        System.out.println("╔═════════════════════════════╗");
+        System.out.println("║   Welcome to TeamMate App   ║");
+        System.out.println("╚═════════════════════════════╝");
 
         while (true) {
             System.out.println("\n=== SELECT USER TYPE ===");
@@ -185,9 +185,8 @@ public class TeamMateApp {
             System.out.println("╚════════════════════════════════════════╝");
             System.out.println("1. View My Information");
             System.out.println("2. View My Team Assignment");
-            System.out.println("3. View All Formed Teams");
-            System.out.println("4. Update My Profile");
-            System.out.println("5. Logout");
+            System.out.println("3. Update My Profile");
+            System.out.println("4. Logout");
             System.out.print("Enter choice: ");
 
             int choice = getIntInput();
@@ -203,13 +202,9 @@ public class TeamMateApp {
                     viewMyTeamAssignment();
                     break;
                 case 3:
-                    Logger.logUserAction(loggedInParticipantId, "Viewed all formed teams");
-                    teamManager.viewFormedTeams();
-                    break;
-                case 4:
                     updateMyProfile();
                     break;
-                case 5:
+                case 4:
                     Logger.logUserAction(loggedInParticipantId, "Logged out");
                     System.out.println("\n✓ Logged out successfully!");
                     loggedInParticipantId = null;
@@ -500,6 +495,6 @@ public class TeamMateApp {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
         String timestamp = now.format(formatter);
-        return "TeamFormations/teamsSize" + teamSize + "_" + timestamp + ".csv";
+        return "TeamFormations/" + teamSize + "_" + timestamp + ".csv";
     }
 }
