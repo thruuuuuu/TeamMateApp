@@ -1,5 +1,9 @@
 package Main;
 
+import Database.AuthenticationService;
+import Database.DatabaseConnection;
+import Database.TeamDAO;
+import Entity.Organizer;
 import Entity.Participant;
 import Enums.Game;
 import Enums.Role;
@@ -7,6 +11,8 @@ import Exceptions.*;
 import Log.Logger;
 import Manager.TeamManager;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Scanner;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -15,14 +21,25 @@ public class TeamMateApp {
     private static final Scanner scanner = new Scanner(System.in);
     private static final TeamManager teamManager = new TeamManager();
     private static String loggedInParticipantId = null;
+    private static String loggedInOrganizerId = null;
 
     public static void main(String[] args) {
         Logger.info("=== TeamMate System Started ===");
-        Logger.logSystemEvent("Application initialized");
 
-        System.out.println("╔═════════════════════════════╗");
-        System.out.println("║   Welcome to TeamMate App   ║");
-        System.out.println("╚═════════════════════════════╝");
+        // Test database connection
+        System.out.println("Testing database connection...");
+        if (!DatabaseConnection.testConnection()) {
+            System.out.println("✗ Failed to connect to database. Please check your MySQL server.");
+            System.out.println("Make sure MySQL is running and credentials in DatabaseConnection.java are correct.");
+            System.exit(1);
+        }
+        System.out.println("✓ Database connection successful!\n");
+
+        Logger.logSystemEvent("Application initialized with database");
+
+        System.out.println("╔═══════════════════════════════╗");
+        System.out.println("║   Welcome to TeamMate App     ║");
+        System.out.println("╚═══════════════════════════════╝");
 
         while (true) {
             System.out.println("\n=== SELECT USER TYPE ===");
@@ -37,7 +54,7 @@ public class TeamMateApp {
             switch (choice) {
                 case 1:
                     Logger.info("Organizer mode selected");
-                    organizerMenu();
+                    organizerLogin();
                     break;
                 case 2:
                     Logger.info("Participant mode selected");
@@ -46,6 +63,7 @@ public class TeamMateApp {
                 case 3:
                     Logger.info("User exiting application");
                     System.out.println("\nThank you for using TeamMate!");
+                    DatabaseConnection.closeConnection();
                     Logger.logSystemEvent("Application shutdown");
                     scanner.close();
                     System.exit(0);
@@ -56,20 +74,122 @@ public class TeamMateApp {
         }
     }
 
+    private static void organizerLogin() {
+        Logger.info("Organizer login initiated");
+
+        System.out.println("\n╔═══════════════════════════════════════╗");
+        System.out.println("║       ORGANIZER LOGIN                 ║");
+        System.out.println("╚═══════════════════════════════════════╝");
+
+        scanner.nextLine(); // Clear buffer
+
+        System.out.println("1. Login with Existing Account");
+        System.out.println("2. Register New Organizer Account");
+        System.out.println("3. Back to Main Menu");
+        System.out.print("Enter choice: ");
+
+        int choice = getIntInput();
+        scanner.nextLine();
+
+        switch (choice) {
+            case 1:
+                loginExistingOrganizer();
+                break;
+            case 2:
+                registerNewOrganizer();
+                break;
+            case 3:
+                return;
+            default:
+                System.out.println("Invalid choice.");
+        }
+    }
+
+    private static void loginExistingOrganizer() {
+        System.out.print("\nEnter Organizer ID (e.g., ORG001): ");
+        String organizerId = scanner.nextLine().trim().toUpperCase();
+
+        System.out.print("Enter Password: ");
+        String password = scanner.nextLine().trim();
+
+        Logger.info("Organizer login attempt: " + organizerId);
+
+        Organizer organizer = AuthenticationService.authenticateOrganizer(organizerId, password);
+
+        if (organizer != null) {
+            loggedInOrganizerId = organizerId;
+            teamManager.setCurrentOrganizer(organizerId);
+
+            System.out.println("\n✓ Login successful!");
+            System.out.println("Welcome, " + organizer.getName() + "!");
+
+            Logger.logUserAction(organizerId, "Logged in successfully");
+            organizerMenu();
+        } else {
+            System.out.println("\n✗ Error: Invalid Organizer ID or password.");
+            Logger.warning("Failed organizer login attempt: " + organizerId);
+        }
+    }
+
+    private static void registerNewOrganizer() {
+        System.out.println("\n=== NEW ORGANIZER REGISTRATION ===");
+
+        System.out.print("Enter your name: ");
+        String name = scanner.nextLine().trim();
+
+        if (name.isEmpty()) {
+            System.out.println("✗ Error: Name cannot be empty");
+            return;
+        }
+
+        System.out.print("Enter your email: ");
+        String email = scanner.nextLine().trim();
+
+        if (!isValidEmail(email)) {
+            System.out.println("✗ Error: Invalid email format");
+            return;
+        }
+
+        System.out.print("Enter password: ");
+        String password = scanner.nextLine().trim();
+
+        if (password.length() < 6) {
+            System.out.println("✗ Error: Password must be at least 6 characters");
+            return;
+        }
+
+        Organizer newOrganizer = new Organizer(name, email, password);
+
+        if (AuthenticationService.registerOrganizer(newOrganizer)) {
+            System.out.println("\n✓ Registration successful!");
+            System.out.println("══════════════════════════════════════");
+            System.out.println("Your Organizer ID: " + newOrganizer.getId());
+            System.out.println("IMPORTANT: Save this ID for login!");
+            System.out.println("══════════════════════════════════════");
+
+            Logger.info("New organizer registered: " + newOrganizer.getId());
+        } else {
+            System.out.println("\n✗ Registration failed. Email may already be registered.");
+        }
+    }
+
     private static void organizerMenu() {
         Logger.info("Entered Organizer Menu");
 
         while (true) {
-            System.out.println("\n╔════════════════════════════════════════╗");
-            System.out.println("║         ORGANIZER MENU                 ║");
-            System.out.println("╚════════════════════════════════════════╝");
+            System.out.println("\n╔═══════════════════════════════════════╗");
+            System.out.println("║         ORGANIZER MENU                ║");
+            System.out.println("║         (Logged in: " + loggedInOrganizerId + ")          ║");
+            System.out.println("╚═══════════════════════════════════════╝");
             System.out.println("1. Upload Participants CSV");
             System.out.println("2. Form Teams");
             System.out.println("3. Load Previous Team Formation");
-            System.out.println("4. View All Participants");
-            System.out.println("5. View Formed Teams");
+            System.out.println("4. View All Participants (from DB)");
+            System.out.println("5. View Formed Teams (from DB)");
             System.out.println("6. View Remaining Participants");
-            System.out.println("7. Back to Main Menu");
+            System.out.println("7. Export Teams to CSV");
+            System.out.println("8. Clear All Teams (Reset)");
+            System.out.println("9. Logout");
             System.out.print("Enter choice: ");
 
             int choice = getIntInput();
@@ -86,19 +206,26 @@ public class TeamMateApp {
                     loadPreviousTeamFormation();
                     break;
                 case 4:
-                    Logger.logUserAction("Organizer", "Viewed all participants");
+                    Logger.logUserAction(loggedInOrganizerId, "Viewed all participants");
                     teamManager.viewAllParticipants();
                     break;
                 case 5:
-                    Logger.logUserAction("Organizer", "Viewed formed teams");
+                    Logger.logUserAction(loggedInOrganizerId, "Viewed formed teams");
                     teamManager.viewFormedTeams();
                     break;
                 case 6:
-                    Logger.logUserAction("Organizer", "Viewed remaining participants");
+                    Logger.logUserAction(loggedInOrganizerId, "Viewed remaining participants");
                     teamManager.viewRemainingParticipants();
                     break;
                 case 7:
-                    Logger.info("Exiting Organizer Menu");
+                    exportTeamsToCSV();
+                    break;
+                case 8:
+                    clearAllTeams();
+                    break;
+                case 9:
+                    // Clear teams on logout
+                    handleLogout();
                     return;
                 default:
                     Logger.warning("Invalid organizer menu choice: " + choice);
@@ -107,12 +234,51 @@ public class TeamMateApp {
         }
     }
 
+    private static void handleLogout() {
+        System.out.print("\nDo you want to keep the current teams in the database? (Y/N): ");
+        scanner.nextLine(); // Clear buffer
+        String keepTeams = scanner.nextLine().trim().toUpperCase();
+
+        if (!keepTeams.equals("Y") && !keepTeams.equals("YES")) {
+            clearAllTeamsFromDatabase();
+            System.out.println("✓ Teams cleared from database");
+        }
+
+        Logger.logUserAction(loggedInOrganizerId, "Logged out");
+        System.out.println("\n✓ Logged out successfully!");
+        loggedInOrganizerId = null;
+    }
+
+    private static void clearAllTeams() {
+        System.out.print("\n⚠ WARNING: This will delete all teams from the database. Continue? (Y/N): ");
+        scanner.nextLine(); // Clear buffer
+        String confirm = scanner.nextLine().trim().toUpperCase();
+
+        if (confirm.equals("Y") || confirm.equals("YES")) {
+            clearAllTeamsFromDatabase();
+            System.out.println("✓ All teams have been cleared from the database");
+            Logger.logUserAction(loggedInOrganizerId, "Cleared all teams");
+        } else {
+            System.out.println("Operation cancelled");
+        }
+    }
+
+    private static void clearAllTeamsFromDatabase() {
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            TeamDAO.clearAllTeamAssignments(conn);
+            Logger.info("All teams cleared from database");
+        } catch (SQLException e) {
+            Logger.error("Error clearing teams", e);
+            System.out.println("✗ Error clearing teams: " + e.getMessage());
+        }
+    }
+
     private static void participantLogin() {
         Logger.info("Participant login initiated");
 
-        System.out.println("\n╔════════════════════════════════════════╗");
-        System.out.println("║       PARTICIPANT LOGIN                ║");
-        System.out.println("╚════════════════════════════════════════╝");
+        System.out.println("\n╔═══════════════════════════════════════╗");
+        System.out.println("║       PARTICIPANT LOGIN               ║");
+        System.out.println("╚═══════════════════════════════════════╝");
 
         scanner.nextLine();
 
@@ -146,26 +312,25 @@ public class TeamMateApp {
         System.out.print("\nEnter your Participant ID (e.g., P001): ");
         String participantId = scanner.nextLine().trim().toUpperCase();
 
-        Logger.info("Login attempt for participant ID: " + participantId);
+        System.out.print("Enter Password : ");
+        String password = scanner.nextLine().trim();
 
-        try {
-            if (teamManager.participantExists(participantId)) {
-                loggedInParticipantId = participantId;
-                Participant participant = teamManager.getParticipantById(participantId);
+        Logger.info("Participant login attempt: " + participantId);
 
-                System.out.println("\n✓ Login successful!");
-                System.out.println("Welcome, " + participant.getName() + "!");
+        Participant participant = AuthenticationService.authenticateParticipant(participantId, password);
 
-                Logger.logUserAction(participantId, "Logged in successfully");
+        if (participant != null) {
+            loggedInParticipantId = participantId;
 
-                participantMenu();
-            } else {
-                Logger.warning("Failed login attempt - ID not found: " + participantId);
-                System.out.println("\n✗ Error: Participant ID not found. Please check your ID or register as new participant.");
-            }
-        } catch (ParticipantNotFoundException e) {
-            Logger.error("Login error for ID: " + participantId, e);
-            System.out.println("✗ Error: " + e.getMessage());
+            System.out.println("\n✓ Login successful!");
+            System.out.println("Welcome, " + participant.getName() + "!");
+
+            Logger.logUserAction(participantId, "Logged in successfully");
+            participantMenu();
+        } else {
+            Logger.warning("Failed login attempt - Invalid credentials: " + participantId);
+            System.out.println("\n✗ Error: Invalid Participant ID or password.");
+            System.out.println("  Password:");
         }
     }
 
@@ -179,10 +344,10 @@ public class TeamMateApp {
         Logger.info("Participant " + loggedInParticipantId + " entered participant menu");
 
         while (true) {
-            System.out.println("\n╔════════════════════════════════════════╗");
-            System.out.println("║         PARTICIPANT MENU               ║");
-            System.out.println("║         (Logged in as: " + loggedInParticipantId + ")      ║");
-            System.out.println("╚════════════════════════════════════════╝");
+            System.out.println("\n╔═══════════════════════════════════════╗");
+            System.out.println("║         PARTICIPANT MENU              ║");
+            System.out.println("║         (Logged in as: " + loggedInParticipantId + ")     ║");
+            System.out.println("╚═══════════════════════════════════════╝");
             System.out.println("1. View My Information");
             System.out.println("2. View My Team Assignment");
             System.out.println("3. Update My Profile");
@@ -225,6 +390,7 @@ public class TeamMateApp {
         }
 
         Logger.info("Organizer uploading CSV: " + filePath);
+        System.out.println("\nValidating and uploading participants to database...");
         teamManager.loadParticipantsFromCSV(filePath);
     }
 
@@ -257,38 +423,18 @@ public class TeamMateApp {
 
             if (stats != null) {
                 stats.display();
-            }
 
-            System.out.print("\nDo you want to save the teams to CSV? (Y/N): ");
-            scanner.nextLine();
-            String saveChoice = scanner.nextLine().trim().toUpperCase();
+                // Ask if user wants to save to database
+                System.out.print("\nDo you want to save these teams to the database? (Y/N): ");
+                scanner.nextLine(); // Clear buffer
+                String saveChoice = scanner.nextLine().trim().toUpperCase();
 
-            if (saveChoice.equals("Y") || saveChoice.equals("YES")) {
-                String autoFileName = generateTeamFileName(size);
-
-                System.out.println("\nSuggested filename: " + autoFileName);
-                System.out.print("Press Enter to use this name, or type a custom path: ");
-                String filePath = scanner.nextLine().trim();
-
-                if (filePath.isEmpty()) {
-                    filePath = autoFileName;
+                if (saveChoice.equals("Y") || saveChoice.equals("YES")) {
+                    teamManager.saveTeamsToDatabase();
+                    System.out.println("✓ Teams saved to database!");
+                } else {
+                    System.out.println(" Teams not saved. You can export to CSV without saving to database.");
                 }
-
-                Logger.info("Saving teams to: " + filePath);
-                teamManager.saveTeamsToCSV(filePath);
-
-                if (teamManager.hasRemainingParticipants()) {
-                    System.out.print("\nSave remaining participants to the same file? (Y/N): ");
-                    String saveRemaining = scanner.nextLine().trim().toUpperCase();
-
-                    if (saveRemaining.equals("Y") || saveRemaining.equals("YES")) {
-                        Logger.info("Appending remaining participants to: " + filePath);
-                        teamManager.appendRemainingParticipantsToCSV(filePath);
-                    }
-                }
-            } else {
-                Logger.info("Teams not saved - user declined");
-                System.out.println("Teams not saved.");
             }
 
         } catch (InvalidTeamSizeException e) {
@@ -297,43 +443,94 @@ public class TeamMateApp {
         }
     }
 
+    private static void exportTeamsToCSV() {
+        scanner.nextLine();
+
+        String autoFileName = generateTeamFileName();
+        System.out.println("\nSuggested filename: " + autoFileName);
+        System.out.print("Press Enter to use this name, or type a custom path: ");
+        String filePath = scanner.nextLine().trim();
+
+        if (filePath.isEmpty()) {
+            filePath = autoFileName;
+        }
+
+        Logger.info("Exporting teams to CSV: " + filePath);
+        teamManager.saveTeamsToCSV(filePath);
+
+        if (teamManager.hasRemainingParticipants()) {
+            System.out.print("\nSave remaining participants to the same file? (Y/N): ");
+            String saveRemaining = scanner.nextLine().trim().toUpperCase();
+
+            if (saveRemaining.equals("Y") || saveRemaining.equals("YES")) {
+                teamManager.appendRemainingParticipantsToCSV(filePath);
+            }
+        }
+    }
+
     private static void completeSurvey() {
         try {
             System.out.println("\n=== PARTICIPANT SURVEY ===\n");
 
+            // NAME VALIDATION
             System.out.print("Enter your name: ");
             String name = scanner.nextLine().trim();
 
-            if (name.isEmpty()) {
-                Logger.warning("Empty name provided in survey");
-                System.out.println("✗ Error: Name cannot be empty");
+            if (name.isEmpty() || name.length() < 2) {
+                Logger.warning("Invalid name provided in survey: " + name);
+                System.out.println("✗ Error: Name must be at least 2 characters long");
                 return;
             }
 
+            if (!name.matches("[a-zA-Z\\s]+")) {
+                Logger.warning("Invalid name format (contains non-letters): " + name);
+                System.out.println("✗ Error: Name can only contain letters and spaces");
+                return;
+            }
+
+            // EMAIL VALIDATION - FIXED
             System.out.print("Enter your email: ");
             String email = scanner.nextLine().trim();
 
-            if (isValidEmail(email)) {
-                throw new InvalidEmailException("Invalid email format. Must contain '@'");
+            if (!isValidEmail(email)) {
+                Logger.warning("Invalid email format provided: " + email);
+                throw new InvalidEmailException("Invalid email format. Must contain '@' and proper domain");
             }
 
+            // SKILL LEVEL VALIDATION
             System.out.print("Enter your skill level (1-10): ");
             int skill = getIntInput();
 
             if (skill < 1 || skill > 10) {
+                Logger.warning("Invalid skill level: " + skill);
                 throw new InvalidSkillLevelException("Skill level must be between 1 and 10");
             }
 
+            // GAME SELECTION
             Game.displayOptions();
             System.out.print("Enter choice: ");
             int gameChoice = getIntInput();
+
+            if (gameChoice < 1 || gameChoice > Game.values().length) {
+                Logger.warning("Invalid game choice: " + gameChoice);
+                System.out.println("✗ Error: Invalid game selection");
+                return;
+            }
             Game game = Game.fromInt(gameChoice);
 
+            // ROLE SELECTION
             Role.displayOptions();
             System.out.print("Enter choice: ");
             int roleChoice = getIntInput();
+
+            if (roleChoice < 1 || roleChoice > Role.values().length) {
+                Logger.warning("Invalid role choice: " + roleChoice);
+                System.out.println("✗ Error: Invalid role selection");
+                return;
+            }
             Role role = Role.fromInt(roleChoice);
 
+            // PERSONALITY SURVEY
             System.out.println("\n=== PERSONALITY SURVEY ===");
             System.out.println("Rate each statement from 1 (Strongly Disagree) to 5 (Strongly Agree)\n");
 
@@ -357,14 +554,16 @@ public class TeamMateApp {
             Participant participant = new Participant(name, email, game, skill, role, totalScore);
             teamManager.addParticipant(participant);
 
+            String password = AuthenticationService.generateParticipantPassword(participant.getId());
+
             Logger.info("New participant registered: " + participant.getId() + " - " + name);
-            Logger.logUserAction(participant.getId(), "Completed registration survey");
 
             System.out.println("\n✓ Registration completed successfully!");
-            System.out.println("═══════════════════════════════════════");
+            System.out.println("══════════════════════════════════════════════════════");
             System.out.println("Your Participant ID: " + participant.getId());
-            System.out.println("IMPORTANT: Save this ID for future login!");
-            System.out.println("═══════════════════════════════════════");
+            System.out.println("Your Password: " + password);
+            System.out.println("IMPORTANT: Save these credentials for future login!");
+            System.out.println("══════════════════════════════════════════════════════");
             System.out.println("Your personality type: " + participant.getPersonalityType().getDisplayName());
 
             loggedInParticipantId = participant.getId();
@@ -418,12 +617,11 @@ public class TeamMateApp {
                 case 1:
                     System.out.print("Enter new email: ");
                     String newEmail = scanner.nextLine().trim();
-                    if (isValidEmail(newEmail)) {
+                    if (!isValidEmail(newEmail)) {
                         throw new InvalidEmailException("Invalid email format");
                     }
                     teamManager.updateParticipantEmail(loggedInParticipantId, newEmail);
-                    Logger.logUserAction(loggedInParticipantId, "Updated email to: " + newEmail);
-                    System.out.println("✓ Email updated successfully!");
+                    System.out.println("✓ Email updated successfully in database!");
                     break;
                 case 2:
                     System.out.print("Enter new skill level (1-10): ");
@@ -432,8 +630,7 @@ public class TeamMateApp {
                         throw new InvalidSkillLevelException("Skill level must be between 1 and 10");
                     }
                     teamManager.updateParticipantSkill(loggedInParticipantId, newSkill);
-                    Logger.logUserAction(loggedInParticipantId, "Updated skill level to: " + newSkill);
-                    System.out.println("✓ Skill level updated successfully!");
+                    System.out.println("✓ Skill level updated successfully in database!");
                     break;
                 case 3:
                     Game.displayOptions();
@@ -441,8 +638,7 @@ public class TeamMateApp {
                     int gameChoice = getIntInput();
                     Game newGame = Game.fromInt(gameChoice);
                     teamManager.updateParticipantGame(loggedInParticipantId, newGame);
-                    Logger.logUserAction(loggedInParticipantId, "Updated game to: " + newGame.getDisplayName());
-                    System.out.println("✓ Preferred game updated successfully!");
+                    System.out.println("✓ Preferred game updated successfully in database!");
                     break;
                 case 4:
                     Role.displayOptions();
@@ -450,18 +646,15 @@ public class TeamMateApp {
                     int roleChoice = getIntInput();
                     Role newRole = Role.fromInt(roleChoice);
                     teamManager.updateParticipantRole(loggedInParticipantId, newRole);
-                    Logger.logUserAction(loggedInParticipantId, "Updated role to: " + newRole.getDisplayName());
-                    System.out.println("✓ Preferred role updated successfully!");
+                    System.out.println("✓ Preferred role updated successfully in database!");
                     break;
                 case 5:
-                    Logger.debug("Profile update cancelled");
                     return;
                 default:
-                    Logger.warning("Invalid profile update choice: " + choice);
                     System.out.println("Invalid choice.");
             }
         } catch (ParticipantNotFoundException | InvalidEmailException | InvalidSkillLevelException e) {
-            Logger.error("Profile update error for " + loggedInParticipantId, e);
+            Logger.error("Profile update error", e);
             System.out.println("✗ Error: " + e.getMessage());
         }
     }
@@ -487,14 +680,21 @@ public class TeamMateApp {
         return rating;
     }
 
+    // FIXED: This now properly validates email
     private static boolean isValidEmail(String email) {
-        return email == null || !email.contains("@") || email.length() <= 3;
+        if (email == null || email.trim().isEmpty()) {
+            return false;
+        }
+
+        // Basic email validation
+        String emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
+        return email.matches(emailRegex);
     }
 
-    private static String generateTeamFileName(int teamSize) {
+    private static String generateTeamFileName() {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
         String timestamp = now.format(formatter);
-        return "TeamFormations/" + teamSize + "_" + timestamp + ".csv";
+        return "TeamFormations/" + timestamp + ".csv";
     }
 }
