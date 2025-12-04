@@ -41,6 +41,13 @@ public class TeamMateApp {
         System.out.println("║   Welcome to TeamMate App     ║");
         System.out.println("╚═══════════════════════════════╝");
 
+        // Add shutdown hook to clear teams on exit
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            Logger.info("Application shutting down - clearing team formations");
+            clearAllTeamsFromDatabase();
+            Logger.logSystemEvent("Application shutdown - teams cleared");
+        }));
+
         while (true) {
             System.out.println("\n=== SELECT USER TYPE ===");
             System.out.println("1. Organizer");
@@ -162,10 +169,10 @@ public class TeamMateApp {
 
         if (AuthenticationService.registerOrganizer(newOrganizer)) {
             System.out.println("\n✓ Registration successful!");
-            System.out.println("══════════════════════════════════════");
+            System.out.println("═══════════════════════════════════");
             System.out.println("Your Organizer ID: " + newOrganizer.getId());
             System.out.println("IMPORTANT: Save this ID for login!");
-            System.out.println("══════════════════════════════════════");
+            System.out.println("═══════════════════════════════════");
 
             Logger.info("New organizer registered: " + newOrganizer.getId());
         } else {
@@ -183,13 +190,11 @@ public class TeamMateApp {
             System.out.println("╚═══════════════════════════════════════╝");
             System.out.println("1. Upload Participants CSV");
             System.out.println("2. Form Teams");
-            System.out.println("3. Load Previous Team Formation");
-            System.out.println("4. View All Participants (from DB)");
-            System.out.println("5. View Formed Teams (from DB)");
-            System.out.println("6. View Remaining Participants");
-            System.out.println("7. Export Teams to CSV");
-            System.out.println("8. Clear All Teams (Reset)");
-            System.out.println("9. Logout");
+            System.out.println("3. View All Participants (from DB)");
+            System.out.println("4. View Formed Teams (from DB)");
+            System.out.println("5. View Remaining Participants");
+            System.out.println("6. Load Previous Team Formation");
+            System.out.println("7. Logout");
             System.out.print("Enter choice: ");
 
             int choice = getIntInput();
@@ -203,28 +208,21 @@ public class TeamMateApp {
                     formTeamsWithOptions();
                     break;
                 case 3:
-                    loadPreviousTeamFormation();
-                    break;
-                case 4:
                     Logger.logUserAction(loggedInOrganizerId, "Viewed all participants");
                     teamManager.viewAllParticipants();
                     break;
-                case 5:
+                case 4:
                     Logger.logUserAction(loggedInOrganizerId, "Viewed formed teams");
                     teamManager.viewFormedTeams();
                     break;
-                case 6:
+                case 5:
                     Logger.logUserAction(loggedInOrganizerId, "Viewed remaining participants");
                     teamManager.viewRemainingParticipants();
                     break;
+                case 6:
+                    loadPreviousTeamFormation();
+                    break;
                 case 7:
-                    exportTeamsToCSV();
-                    break;
-                case 8:
-                    clearAllTeams();
-                    break;
-                case 9:
-                    // Clear teams on logout
                     handleLogout();
                     return;
                 default:
@@ -235,32 +233,9 @@ public class TeamMateApp {
     }
 
     private static void handleLogout() {
-        System.out.print("\nDo you want to keep the current teams in the database? (Y/N): ");
-        scanner.nextLine(); // Clear buffer
-        String keepTeams = scanner.nextLine().trim().toUpperCase();
-
-        if (!keepTeams.equals("Y") && !keepTeams.equals("YES")) {
-            clearAllTeamsFromDatabase();
-            System.out.println("✓ Teams cleared from database");
-        }
-
         Logger.logUserAction(loggedInOrganizerId, "Logged out");
         System.out.println("\n✓ Logged out successfully!");
         loggedInOrganizerId = null;
-    }
-
-    private static void clearAllTeams() {
-        System.out.print("\n⚠ WARNING: This will delete all teams from the database. Continue? (Y/N): ");
-        scanner.nextLine(); // Clear buffer
-        String confirm = scanner.nextLine().trim().toUpperCase();
-
-        if (confirm.equals("Y") || confirm.equals("YES")) {
-            clearAllTeamsFromDatabase();
-            System.out.println("✓ All teams have been cleared from the database");
-            Logger.logUserAction(loggedInOrganizerId, "Cleared all teams");
-        } else {
-            System.out.println("Operation cancelled");
-        }
     }
 
     private static void clearAllTeamsFromDatabase() {
@@ -269,7 +244,6 @@ public class TeamMateApp {
             Logger.info("All teams cleared from database");
         } catch (SQLException e) {
             Logger.error("Error clearing teams", e);
-            System.out.println("✗ Error clearing teams: " + e.getMessage());
         }
     }
 
@@ -312,7 +286,7 @@ public class TeamMateApp {
         System.out.print("\nEnter your Participant ID (e.g., P001): ");
         String participantId = scanner.nextLine().trim().toUpperCase();
 
-        System.out.print("Enter Password : ");
+        System.out.print("Enter Password: ");
         String password = scanner.nextLine().trim();
 
         Logger.info("Participant login attempt: " + participantId);
@@ -330,7 +304,7 @@ public class TeamMateApp {
         } else {
             Logger.warning("Failed login attempt - Invalid credentials: " + participantId);
             System.out.println("\n✗ Error: Invalid Participant ID or password.");
-            System.out.println("  Password:");
+            System.out.println("  Password format: ID-123");
         }
     }
 
@@ -424,16 +398,17 @@ public class TeamMateApp {
             if (stats != null) {
                 stats.display();
 
-                // Ask if user wants to save to database
-                System.out.print("\nDo you want to save these teams to the database? (Y/N): ");
+                // Automatically save to database
+                teamManager.saveTeamsToDatabase();
+                System.out.println("\n✓ Teams automatically saved to database!");
+
+                // Ask if user wants to save to CSV
+                System.out.print("\nDo you want to export these teams to CSV? (Y/N): ");
                 scanner.nextLine(); // Clear buffer
                 String saveChoice = scanner.nextLine().trim().toUpperCase();
 
                 if (saveChoice.equals("Y") || saveChoice.equals("YES")) {
-                    teamManager.saveTeamsToDatabase();
-                    System.out.println("✓ Teams saved to database!");
-                } else {
-                    System.out.println(" Teams not saved. You can export to CSV without saving to database.");
+                    exportTeamsToCSV();
                 }
             }
 
@@ -444,8 +419,6 @@ public class TeamMateApp {
     }
 
     private static void exportTeamsToCSV() {
-        scanner.nextLine();
-
         String autoFileName = generateTeamFileName();
         System.out.println("\nSuggested filename: " + autoFileName);
         System.out.print("Press Enter to use this name, or type a custom path: ");
@@ -488,7 +461,7 @@ public class TeamMateApp {
                 return;
             }
 
-            // EMAIL VALIDATION - FIXED
+            // EMAIL VALIDATION
             System.out.print("Enter your email: ");
             String email = scanner.nextLine().trim();
 
@@ -559,11 +532,11 @@ public class TeamMateApp {
             Logger.info("New participant registered: " + participant.getId() + " - " + name);
 
             System.out.println("\n✓ Registration completed successfully!");
-            System.out.println("══════════════════════════════════════════════════════");
+            System.out.println("════════════════════════════════════════════════════");
             System.out.println("Your Participant ID: " + participant.getId());
             System.out.println("Your Password: " + password);
             System.out.println("IMPORTANT: Save these credentials for future login!");
-            System.out.println("══════════════════════════════════════════════════════");
+            System.out.println("════════════════════════════════════════════════════");
             System.out.println("Your personality type: " + participant.getPersonalityType().getDisplayName());
 
             loggedInParticipantId = participant.getId();
@@ -680,13 +653,11 @@ public class TeamMateApp {
         return rating;
     }
 
-    // FIXED: This now properly validates email
     private static boolean isValidEmail(String email) {
         if (email == null || email.trim().isEmpty()) {
             return false;
         }
 
-        // Basic email validation
         String emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
         return email.matches(emailRegex);
     }

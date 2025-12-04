@@ -36,8 +36,7 @@ public class TeamManager {
 
     public void addParticipant(Participant participant) {
         // Generate password for the participant
-        String password = AuthenticationService.generateParticipantPassword(
-                participant.getName(), participant.getId());
+        String password = AuthenticationService.generateParticipantPassword(participant.getId());
 
         // Insert into database
         if (ParticipantDAO.insertParticipant(participant, password)) {
@@ -167,11 +166,57 @@ public class TeamManager {
             formedTeams.addAll(teamMap.values());
             formedTeams.sort(Comparator.comparingInt(Team::getTeamId));
 
-            Logger.info("Successfully loaded team formation - Teams: " + formedTeams.size());
-            System.out.println("✓ Successfully loaded team formation from " + filePath);
-            System.out.println("  Teams loaded: " + formedTeams.size());
-            System.out.println("  Total participants: " + participants.size());
-            System.out.println("  Remaining participants: " + remainingParticipants.size());
+            // Calculate statistics
+            int totalParticipants = participants.size();
+            int teamsFormed = formedTeams.size();
+            int participantsAssigned = totalParticipants - remainingParticipants.size();
+            int participantsRemaining = remainingParticipants.size();
+
+            // Determine team size from first team
+            int loadedTeamSize = formedTeams.isEmpty() ? 0 : formedTeams.get(0).getSize();
+
+            Logger.info("Successfully loaded team formation - Teams: " + teamsFormed);
+
+            // Display statistics
+            System.out.println("\n╔═══════════════════════════════════════╗");
+            System.out.println("║     LOADED FORMATION STATISTICS       ║");
+            System.out.println("╚═══════════════════════════════════════╝");
+            System.out.println("  File: " + filePath);
+            System.out.println("  Total Participants:      " + totalParticipants);
+            System.out.println("  Team Size:               " + loadedTeamSize);
+            System.out.println("  Teams Formed:            " + teamsFormed);
+            System.out.println("  Participants Assigned:   " + participantsAssigned);
+            System.out.println("  Participants Remaining:  " + participantsRemaining);
+            System.out.println("═══════════════════════════════════════════");
+
+            // Ask if user wants to view details
+            System.out.print("\nDo you want to view the team details? (Y/N): ");
+            Scanner scanner = new Scanner(System.in);
+            String viewChoice = scanner.nextLine().trim().toUpperCase();
+
+            if (viewChoice.equals("Y") || viewChoice.equals("YES")) {
+                // Display formed teams
+                if (!formedTeams.isEmpty()) {
+                    System.out.println("\n╔═══════════════════════════════════════════════════════════════════════════════════════════════╗");
+                    System.out.println("║  FORMED TEAMS (" + formedTeams.size() + " teams)");
+                    System.out.println("╚═══════════════════════════════════════════════════════════════════════════════════════════════╝");
+
+                    for (Team team : formedTeams) {
+                        System.out.println(team.toString());
+                    }
+                }
+
+                // Display remaining participants
+                if (!remainingParticipants.isEmpty()) {
+                    System.out.println("\n╔═══════════════════════════════════════════════════════════════════════════════════════════════╗");
+                    System.out.println("║  REMAINING PARTICIPANTS (" + remainingParticipants.size() + " unassigned)");
+                    System.out.println("╚═══════════════════════════════════════════════════════════════════════════════════════════════╝");
+
+                    for (Participant p : remainingParticipants) {
+                        System.out.println("  " + p.toString());
+                    }
+                }
+            }
 
         } catch (FileNotFoundException e) {
             Logger.error("Team formation file not found: " + filePath, e);
@@ -240,8 +285,7 @@ public class TeamManager {
     }
 
     /**
-     * NEW METHOD: Save formed teams to database
-     * Called explicitly by user choice, not automatically
+     * Save formed teams to database
      */
     public void saveTeamsToDatabase() {
         if (formedTeams == null || formedTeams.isEmpty()) {
@@ -322,9 +366,9 @@ public class TeamManager {
             return;
         }
 
-        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("\n╔═══════════════════════════════════════════════════════════════════════════════════════════════╗");
         System.out.println("║  ALL PARTICIPANTS (" + participants.size() + " total) - Loaded from Database");
-        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("╚═══════════════════════════════════════════════════════════════════════════════════════════════╝");
 
         for (Participant p : participants) {
             System.out.println("  " + p.toString());
@@ -342,9 +386,9 @@ public class TeamManager {
             return;
         }
 
-        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("\n╔═══════════════════════════════════════════════════════════════════════════════════════════════╗");
         System.out.println("║  FORMED TEAMS (" + formedTeams.size() + " teams) - Loaded from Database");
-        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("╚═══════════════════════════════════════════════════════════════════════════════════════════════╝");
 
         for (Team team : formedTeams) {
             System.out.println(team.toString());
@@ -362,9 +406,9 @@ public class TeamManager {
             return;
         }
 
-        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("\n╔═══════════════════════════════════════════════════════════════════════════════════════════════╗");
         System.out.println("║  REMAINING PARTICIPANTS (" + remainingParticipants.size() + " unassigned)");
-        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("╚═══════════════════════════════════════════════════════════════════════════════════════════════╝");
 
         for (Participant p : remainingParticipants) {
             System.out.println("  " + p.toString());
@@ -374,9 +418,9 @@ public class TeamManager {
     public void viewParticipantInfo(String participantId) throws ParticipantNotFoundException {
         Participant participant = getParticipantById(participantId);
 
-        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("\n╔═══════════════════════════════════════════════════════════════════════════════════════════════╗");
         System.out.println("║  PARTICIPANT INFORMATION (From Database)");
-        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("╚═══════════════════════════════════════════════════════════════════════════════════════════════╝");
         System.out.println("  " + participant.toString());
 
         Integer teamId = TeamDAO.getParticipantTeamId(participantId);
@@ -391,9 +435,9 @@ public class TeamManager {
     public void viewParticipantTeamAssignment(String participantId) throws ParticipantNotFoundException {
         Participant participant = getParticipantById(participantId);
 
-        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("\n╔═══════════════════════════════════════════════════════════════════════════════════════════════╗");
         System.out.println("║  MY TEAM ASSIGNMENT (From Database)");
-        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("╚═══════════════════════════════════════════════════════════════════════════════════════════════╝");
 
         Integer teamId = TeamDAO.getParticipantTeamId(participantId);
 
