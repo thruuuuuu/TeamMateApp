@@ -16,12 +16,33 @@ public class FormationStatistics {
         this.teamSize = teamSize;
     }
 
+    // Getters for database operations
+    public int getTotalParticipants() {
+        return totalParticipants;
+    }
+
+    public int getTeamsFormed() {
+        return teamsFormed;
+    }
+
+    public int getParticipantsAssigned() {
+        return participantsAssigned;
+    }
+
+    public int getParticipantsRemaining() {
+        return participantsRemaining;
+    }
+
+    public int getTeamSize() {
+        return teamSize;
+    }
+
     public void display() {
         System.out.println("\n╔════════════════════════════════════════╗");
         System.out.println("║     TEAM FORMATION STATISTICS          ║");
         System.out.println("╚════════════════════════════════════════╝");
         System.out.println("  Total Participants:      " + totalParticipants);
-        System.out.println("  Entity.Team Size:               " + teamSize);
+        System.out.println("  Team Size:               " + teamSize);
         System.out.println("  Teams Formed:            " + teamsFormed);
         System.out.println("  Participants Assigned:   " + participantsAssigned);
         System.out.println("  Participants Remaining:  " + participantsRemaining);
