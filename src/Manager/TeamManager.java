@@ -1,5 +1,8 @@
 package Manager;
 
+import Database.ParticipantDAO;
+import Database.TeamDAO;
+import Database.AuthenticationService;
 import Entity.Participant;
 import Entity.Team;
 import Enums.Game;
@@ -14,11 +17,11 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class TeamManager {
-    private final List<Participant> participants;
-    private final List<Team> formedTeams;
-    private final List<Participant> remainingParticipants;
+    private List<Participant> participants;
+    private List<Team> formedTeams;
+    private List<Participant> remainingParticipants;
     private int teamSize = 5;
-    private int nextParticipantId = 1000;
+    private String currentOrganizerId = null;
 
     public TeamManager() {
         this.participants = new ArrayList<>();
@@ -27,10 +30,21 @@ public class TeamManager {
         Logger.debug("TeamManager instance created");
     }
 
+    public void setCurrentOrganizer(String organizerId) {
+        this.currentOrganizerId = organizerId;
+    }
+
     public void addParticipant(Participant participant) {
-        participants.add(participant);
-        Logger.info("Participant added: " + participant.getId() + " - " + participant.getName());
-        Logger.debug("Total participants: " + participants.size());
+        // Generate password for the participant
+        String password = AuthenticationService.generateParticipantPassword(
+                participant.getName(), participant.getId());
+
+        // Insert into database
+        if (ParticipantDAO.insertParticipant(participant, password)) {
+            participants.add(participant);
+            Logger.info("Participant added: " + participant.getId() + " - " + participant.getName());
+            Logger.debug("Total participants: " + participants.size());
+        }
     }
 
     public void setTeamSize(int size) throws InvalidTeamSizeException {
@@ -44,21 +58,20 @@ public class TeamManager {
     }
 
     public boolean participantExists(String participantId) {
-        boolean exists = participants.stream()
-                .anyMatch(p -> p.getId().equalsIgnoreCase(participantId));
+        boolean exists = AuthenticationService.participantExists(participantId);
         Logger.debug("Participant existence check for " + participantId + ": " + exists);
         return exists;
     }
 
     public Participant getParticipantById(String participantId) throws ParticipantNotFoundException {
         Logger.debug("Retrieving participant: " + participantId);
-        Participant participant = participants.stream()
-                .filter(p -> p.getId().equalsIgnoreCase(participantId))
-                .findFirst()
-                .orElseThrow(() -> {
-                    Logger.warning("Participant not found: " + participantId);
-                    return new ParticipantNotFoundException("Participant not found: " + participantId);
-                });
+        Participant participant = ParticipantDAO.getParticipantById(participantId);
+
+        if (participant == null) {
+            Logger.warning("Participant not found: " + participantId);
+            throw new ParticipantNotFoundException("Participant not found: " + participantId);
+        }
+
         Logger.debug("Participant retrieved: " + participantId);
         return participant;
     }
@@ -78,26 +91,17 @@ public class TeamManager {
 
         try {
             List<Participant> loadedParticipants = future.get();
+
+            // Bulk insert into database
+            int insertedCount = ParticipantDAO.bulkInsertParticipants(loadedParticipants);
+
+            // Reload from database to get fresh data
             participants.clear();
-            participants.addAll(loadedParticipants);
+            participants.addAll(ParticipantDAO.getAllParticipants());
 
-            Logger.info("Successfully loaded " + participants.size() + " participants from " + filePath);
-            System.out.println("\n✓ Successfully loaded " + participants.size() + " participants from " + filePath);
-
-            for (Participant p : participants) {
-                String id = p.getId();
-                if (id.startsWith("P")) {
-                    try {
-                        int idNum = Integer.parseInt(id.substring(1));
-                        if (idNum >= nextParticipantId) {
-                            nextParticipantId = idNum + 1;
-                        }
-                    } catch (NumberFormatException e) {
-                        Logger.warning("Invalid participant ID format: " + id);
-                    }
-                }
-            }
-            Logger.debug("Next participant ID set to: " + nextParticipantId);
+            Logger.info("Successfully loaded and inserted " + insertedCount + " participants from " + filePath);
+            System.out.println("\n✓ Successfully loaded " + insertedCount + " participants from " + filePath);
+            System.out.println("  All participants have been saved to the database.");
 
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
@@ -115,18 +119,16 @@ public class TeamManager {
 
     public void loadTeamFormationFromCSV(String filePath) {
         Logger.info("Loading team formation from CSV: " + filePath);
-        System.out.println("\nLoading team formation...");
+        System.out.println("\nLoading team formation from file...");
 
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
             boolean isHeader = true;
             int lineNumber = 0;
 
-            // Clear existing data
             formedTeams.clear();
             remainingParticipants.clear();
             participants.clear();
-            Logger.debug("Cleared existing data for fresh load");
 
             Map<Integer, Team> teamMap = new HashMap<>();
 
@@ -142,25 +144,19 @@ public class TeamManager {
                     try {
                         int teamId = Integer.parseInt(data[0].trim());
                         String id = data[1].trim();
-                        String name = data[2].trim();
-                        String email = data[3].trim();
-                        String game = data[4].trim();
-                        int skill = Integer.parseInt(data[5].trim());
-                        String role = data[6].trim();
-                        int personalityScore = Integer.parseInt(data[7].trim());
 
-                        Participant p = new Participant(id, name, email, game, skill, role, personalityScore);
-                        participants.add(p);
+                        // Get participant from database
+                        Participant p = ParticipantDAO.getParticipantById(id);
 
-                        // TeamID 0 means remaining/unassigned participant
-                        if (teamId == 0) {
-                            remainingParticipants.add(p);
-                            Logger.debug("Added remaining participant: " + id);
-                        } else {
-                            // Add to team
-                            Team team = teamMap.computeIfAbsent(teamId, Team::new);
-                            team.addMember(p);
-                            Logger.debug("Added participant " + id + " to team " + teamId);
+                        if (p != null) {
+                            participants.add(p);
+
+                            if (teamId == 0) {
+                                remainingParticipants.add(p);
+                            } else {
+                                Team team = teamMap.computeIfAbsent(teamId, Team::new);
+                                team.addMember(p);
+                            }
                         }
                     } catch (NumberFormatException e) {
                         Logger.warning("Invalid data format at line " + lineNumber + ": " + line);
@@ -168,14 +164,10 @@ public class TeamManager {
                 }
             }
 
-            // Add all teams to formedTeams list (sorted by team ID)
             formedTeams.addAll(teamMap.values());
             formedTeams.sort(Comparator.comparingInt(Team::getTeamId));
 
-            Logger.info("Successfully loaded team formation - Teams: " + formedTeams.size() +
-                    ", Participants: " + participants.size() +
-                    ", Remaining: " + remainingParticipants.size());
-
+            Logger.info("Successfully loaded team formation - Teams: " + formedTeams.size());
             System.out.println("✓ Successfully loaded team formation from " + filePath);
             System.out.println("  Teams loaded: " + formedTeams.size());
             System.out.println("  Total participants: " + participants.size());
@@ -187,16 +179,16 @@ public class TeamManager {
         } catch (IOException e) {
             Logger.error("Error reading team formation file: " + filePath, e);
             System.out.println("✗ Error reading file: " + e.getMessage());
-        } catch (NumberFormatException e) {
-            Logger.error("Invalid number format in team formation CSV", e);
-            System.out.println("✗ Error: Invalid number format in CSV");
         }
     }
 
     public FormationStatistics formTeams() {
         Logger.info("Starting team formation process with team size: " + teamSize);
-        ExecutorService executor = Executors.newSingleThreadExecutor();
 
+        // Load all participants from database
+        participants = ParticipantDAO.getAllParticipants();
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         TeamFormationThread formationThread = new TeamFormationThread(participants, teamSize);
         Future<List<Team>> future = executor.submit(formationThread);
 
@@ -204,14 +196,13 @@ public class TeamManager {
 
         try {
             System.out.println("\nForming teams...");
-
             int totalParticipants = participants.size();
-            Logger.debug("Total participants for team formation: " + totalParticipants);
 
             List<Team> teams = future.get();
             formedTeams.clear();
             formedTeams.addAll(teams);
 
+            // Calculate remaining participants
             remainingParticipants.clear();
             Set<Participant> assignedParticipants = new HashSet<>();
             for (Team team : formedTeams) {
@@ -228,13 +219,9 @@ public class TeamManager {
             int participantsAssigned = assignedParticipants.size();
             int participantsRemaining = remainingParticipants.size();
 
-            Logger.info("Team formation completed - " +
-                    "Teams: " + teamsFormed +
-                    ", Assigned: " + participantsAssigned +
-                    ", Remaining: " + participantsRemaining);
-
             stats = new FormationStatistics(totalParticipants, teamsFormed, participantsAssigned, participantsRemaining, teamSize);
 
+            Logger.info("Team formation completed - Teams: " + teamsFormed);
             System.out.println("✓ Successfully formed " + teamsFormed + " teams!");
 
         } catch (ExecutionException e) {
@@ -247,10 +234,30 @@ public class TeamManager {
             Thread.currentThread().interrupt();
         } finally {
             executor.shutdown();
-            Logger.debug("Team formation executor shutdown");
         }
 
         return stats;
+    }
+
+    /**
+     * NEW METHOD: Save formed teams to database
+     * Called explicitly by user choice, not automatically
+     */
+    public void saveTeamsToDatabase() {
+        if (formedTeams == null || formedTeams.isEmpty()) {
+            Logger.warning("No teams to save to database");
+            System.out.println("✗ No teams formed yet. Please form teams first.");
+            return;
+        }
+
+        boolean saved = TeamDAO.saveTeamsToDatabase(formedTeams, teamSize, currentOrganizerId);
+
+        if (saved) {
+            Logger.info("Teams saved to database successfully");
+        } else {
+            Logger.error("Failed to save teams to database");
+            System.out.println("✗ Error saving teams to database");
+        }
     }
 
     public void saveTeamsToCSV(String filePath) {
@@ -276,7 +283,6 @@ public class TeamManager {
             Thread.currentThread().interrupt();
         } finally {
             executor.shutdown();
-            Logger.debug("Team saver executor shutdown");
         }
     }
 
@@ -296,27 +302,29 @@ public class TeamManager {
                 writer.println("0," + p.toCSVString());
             }
 
-            Logger.info("Appended " + remainingParticipants.size() + " remaining participants with TeamID=0");
+            Logger.info("Appended " + remainingParticipants.size() + " remaining participants");
             System.out.println("✓ Saved " + remainingParticipants.size() + " remaining participants with TeamID=0");
 
         } catch (IOException e) {
             Logger.error("Error appending remaining participants", e);
-            System.out.println("✗ Error appending remaining participants: " + e.getMessage());
+            System.out.println("✗ Error: " + e.getMessage());
         }
     }
 
     public void viewAllParticipants() {
+        // Load from database
+        participants = ParticipantDAO.getAllParticipants();
+
         Logger.debug("Viewing all participants (count: " + participants.size() + ")");
 
         if (participants.isEmpty()) {
-            Logger.debug("No participants to display");
-            System.out.println("\n✗ No participants available.");
+            System.out.println("\n✗ No participants available in database.");
             return;
         }
 
-        System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
-        System.out.println("║  ALL PARTICIPANTS (" + participants.size() + " total)");
-        System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("║  ALL PARTICIPANTS (" + participants.size() + " total) - Loaded from Database");
+        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
 
         for (Participant p : participants) {
             System.out.println("  " + p.toString());
@@ -324,17 +332,19 @@ public class TeamManager {
     }
 
     public void viewFormedTeams() {
+        // Load teams from database
+        formedTeams = TeamDAO.getAllTeamsFromDatabase();
+
         Logger.debug("Viewing formed teams (count: " + formedTeams.size() + ")");
 
         if (formedTeams.isEmpty()) {
-            Logger.debug("No teams to display");
             System.out.println("\n✗ No teams formed yet. Please form teams first.");
             return;
         }
 
-        System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
-        System.out.println("║  FORMED TEAMS (" + formedTeams.size() + " teams)");
-        System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("║  FORMED TEAMS (" + formedTeams.size() + " teams) - Loaded from Database");
+        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
 
         for (Team team : formedTeams) {
             System.out.println(team.toString());
@@ -342,17 +352,19 @@ public class TeamManager {
     }
 
     public void viewRemainingParticipants() {
+        // Get unassigned participants from database
+        remainingParticipants = ParticipantDAO.getUnassignedParticipants();
+
         Logger.debug("Viewing remaining participants (count: " + remainingParticipants.size() + ")");
 
         if (remainingParticipants.isEmpty()) {
-            Logger.debug("No remaining participants");
-            System.out.println("\n✓ No remaining participants. All participants have been assigned to teams!");
+            System.out.println("\n✓ No remaining participants. All assigned to teams!");
             return;
         }
 
-        System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
         System.out.println("║  REMAINING PARTICIPANTS (" + remainingParticipants.size() + " unassigned)");
-        System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
 
         for (Participant p : remainingParticipants) {
             System.out.println("  " + p.toString());
@@ -360,120 +372,69 @@ public class TeamManager {
     }
 
     public void viewParticipantInfo(String participantId) throws ParticipantNotFoundException {
-        Logger.debug("Viewing info for participant: " + participantId);
         Participant participant = getParticipantById(participantId);
 
-        System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
-        System.out.println("║  PARTICIPANT INFORMATION");
-        System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("║  PARTICIPANT INFORMATION (From Database)");
+        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
         System.out.println("  " + participant.toString());
 
-        for (Team team : formedTeams) {
-            if (team.getMembers().contains(participant)) {
-                Logger.debug("Participant " + participantId + " is in team " + team.getTeamId());
-                System.out.println("\n  ✓ Assigned to Team " + team.getTeamId());
-                return;
-            }
-        }
+        Integer teamId = TeamDAO.getParticipantTeamId(participantId);
 
-        if (remainingParticipants.contains(participant)) {
-            Logger.debug("Participant " + participantId + " is in remaining pool");
-            System.out.println("\n  ⚠ Remaining participant (not assigned to any team)");
+        if (teamId != null) {
+            System.out.println("\n  ✓ Assigned to Team " + teamId);
         } else {
-            Logger.debug("Participant " + participantId + " not yet assigned");
-            System.out.println("\n  ⚠ Not yet assigned to a team");
+            System.out.println("\n  ⚠ Not assigned to any team");
         }
     }
 
     public void viewParticipantTeamAssignment(String participantId) throws ParticipantNotFoundException {
-        Logger.debug("Viewing team assignment for participant: " + participantId);
         Participant participant = getParticipantById(participantId);
 
-        System.out.println("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════╗");
-        System.out.println("║  MY TEAM ASSIGNMENT");
-        System.out.println("╚════════════════════════════════════════════════════════════════════════════════════════════════════╝");
+        System.out.println("\n╔══════════════════════════════════════════════════════════════════════════════════════════════╗");
+        System.out.println("║  MY TEAM ASSIGNMENT (From Database)");
+        System.out.println("╚══════════════════════════════════════════════════════════════════════════════════════════════╝");
 
-        for (Team team : formedTeams) {
-            if (team.getMembers().contains(participant)) {
-                Logger.info("Displayed team assignment for " + participantId + " - Team " + team.getTeamId());
-                System.out.println("\n✓ You are assigned to Team " + team.getTeamId());
-                System.out.println("\n" + team.toString());
-                return;
-            }
-        }
+        Integer teamId = TeamDAO.getParticipantTeamId(participantId);
 
-        if (remainingParticipants.contains(participant)) {
-            Logger.debug("Participant " + participantId + " is in remaining pool");
-            System.out.println("\n⚠ You are in the remaining participants pool.");
-            System.out.println("  You were not assigned to a team in the current formation.");
+        if (teamId != null) {
+            Team team = TeamDAO.getTeamById(teamId);
+            System.out.println("\n✓ You are assigned to Team " + teamId);
+            System.out.println("\n" + team.toString());
         } else {
-            Logger.debug("Participant " + participantId + " waiting for team formation");
             System.out.println("\n⚠ You have not been assigned to a team yet.");
-            System.out.println("  Teams will be formed by the organizer soon.");
         }
     }
 
     public void updateParticipantEmail(String participantId, String newEmail) throws ParticipantNotFoundException {
-        Logger.info("Updating email for participant " + participantId + " to: " + newEmail);
-        Participant participant = getParticipantById(participantId);
-        Participant updated = new Participant(
-                participant.getId(),
-                participant.getName(),
-                newEmail,
-                participant.getGame().getDisplayName(),
-                participant.getSkillLevel(),
-                participant.getRole().getDisplayName(),
-                participant.getPersonalityScore()
-        );
-        participants.set(participants.indexOf(participant), updated);
-        Logger.info("Email updated successfully for: " + participantId);
+        if (ParticipantDAO.updateParticipantEmail(participantId, newEmail)) {
+            Logger.info("Email updated in database for: " + participantId);
+        } else {
+            throw new ParticipantNotFoundException("Failed to update participant email");
+        }
     }
 
     public void updateParticipantSkill(String participantId, int newSkill) throws ParticipantNotFoundException {
-        Logger.info("Updating skill level for participant " + participantId + " to: " + newSkill);
-        Participant participant = getParticipantById(participantId);
-        Participant updated = new Participant(
-                participant.getId(),
-                participant.getName(),
-                participant.getEmail(),
-                participant.getGame().getDisplayName(),
-                newSkill,
-                participant.getRole().getDisplayName(),
-                participant.getPersonalityScore()
-        );
-        participants.set(participants.indexOf(participant), updated);
-        Logger.info("Skill level updated successfully for: " + participantId);
+        if (ParticipantDAO.updateParticipantSkill(participantId, newSkill)) {
+            Logger.info("Skill updated in database for: " + participantId);
+        } else {
+            throw new ParticipantNotFoundException("Failed to update participant skill");
+        }
     }
 
     public void updateParticipantGame(String participantId, Game newGame) throws ParticipantNotFoundException {
-        Logger.info("Updating game for participant " + participantId + " to: " + newGame.getDisplayName());
-        Participant participant = getParticipantById(participantId);
-        Participant updated = new Participant(
-                participant.getId(),
-                participant.getName(),
-                participant.getEmail(),
-                newGame.getDisplayName(),
-                participant.getSkillLevel(),
-                participant.getRole().getDisplayName(),
-                participant.getPersonalityScore()
-        );
-        participants.set(participants.indexOf(participant), updated);
-        Logger.info("Game updated successfully for: " + participantId);
+        if (ParticipantDAO.updateParticipantGame(participantId, newGame)) {
+            Logger.info("Game updated in database for: " + participantId);
+        } else {
+            throw new ParticipantNotFoundException("Failed to update participant game");
+        }
     }
 
     public void updateParticipantRole(String participantId, Role newRole) throws ParticipantNotFoundException {
-        Logger.info("Updating role for participant " + participantId + " to: " + newRole.getDisplayName());
-        Participant participant = getParticipantById(participantId);
-        Participant updated = new Participant(
-                participant.getId(),
-                participant.getName(),
-                participant.getEmail(),
-                participant.getGame().getDisplayName(),
-                participant.getSkillLevel(),
-                newRole.getDisplayName(),
-                participant.getPersonalityScore()
-        );
-        participants.set(participants.indexOf(participant), updated);
-        Logger.info("Role updated successfully for: " + participantId);
+        if (ParticipantDAO.updateParticipantRole(participantId, newRole)) {
+            Logger.info("Role updated in database for: " + participantId);
+        } else {
+            throw new ParticipantNotFoundException("Failed to update participant role");
+        }
     }
 }
