@@ -38,7 +38,8 @@ public class Participant {
     }
 
     private String generateId() {
-        return "P" + String.format("%03d", (int)(Math.random() * 1000));
+        // Generate a unique ID with timestamp to avoid collisions
+        return "P" + System.currentTimeMillis() % 100000;
     }
 
     private Game parseGame(String gameStr) {
@@ -100,7 +101,6 @@ public class Participant {
     }
 
     public String toCSVString() {
-        // FIXED: Return proper format with all fields as strings
         return String.format("%s,%s,%s,%s,%d,%s,%d,%s",
                 id,
                 name,
@@ -110,5 +110,18 @@ public class Participant {
                 role.getDisplayName(),
                 personalityScore,
                 personalityType.getDisplayName());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Participant that = (Participant) o;
+        return id.equals(that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return id.hashCode();
     }
 }
