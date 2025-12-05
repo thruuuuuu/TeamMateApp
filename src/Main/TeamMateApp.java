@@ -188,13 +188,13 @@ public class TeamMateApp {
             System.out.println("║         ORGANIZER MENU                ║");
             System.out.println("║         (Logged in: " + loggedInOrganizerId + ")          ║");
             System.out.println("╚═══════════════════════════════════════╝");
-            System.out.println("1. Upload Participants CSV");
-            System.out.println("2. Form Teams");
-            System.out.println("3. View All Participants (from DB)");
-            System.out.println("4. View Formed Teams (from DB)");
-            System.out.println("5. View Remaining Participants");
-            System.out.println("6. Load Previous Team Formation");
-            System.out.println("7. Logout");
+            System.out.println("\nAll participants have been saved to the database.\n");
+            System.out.println("1. Form Teams");
+            System.out.println("2. View All Participants");
+            System.out.println("3. View Formed Teams");
+            System.out.println("4. View Remaining Participants");
+            System.out.println("5. Load Previous Team Formation from CSV");
+            System.out.println("6. Logout");
             System.out.print("Enter choice: ");
 
             int choice = getIntInput();
@@ -202,27 +202,24 @@ public class TeamMateApp {
 
             switch (choice) {
                 case 1:
-                    uploadCSV();
-                    break;
-                case 2:
                     formTeamsWithOptions();
                     break;
-                case 3:
+                case 2:
                     Logger.logUserAction(loggedInOrganizerId, "Viewed all participants");
                     teamManager.viewAllParticipants();
                     break;
-                case 4:
+                case 3:
                     Logger.logUserAction(loggedInOrganizerId, "Viewed formed teams");
                     teamManager.viewFormedTeams();
                     break;
-                case 5:
+                case 4:
                     Logger.logUserAction(loggedInOrganizerId, "Viewed remaining participants");
                     teamManager.viewRemainingParticipants();
                     break;
-                case 6:
+                case 5:
                     loadPreviousTeamFormation();
                     break;
-                case 7:
+                case 6:
                     handleLogout();
                     return;
                 default:
@@ -355,18 +352,6 @@ public class TeamMateApp {
         }
     }
 
-    private static void uploadCSV() {
-        System.out.print("\nEnter CSV file path (or press Enter for default 'participants.csv'): ");
-        scanner.nextLine();
-        String filePath = scanner.nextLine().trim();
-        if (filePath.isEmpty()) {
-            filePath = "participants.csv";
-        }
-
-        Logger.info("Organizer uploading CSV: " + filePath);
-        System.out.println("\nValidating and uploading participants to database...");
-        teamManager.loadParticipantsFromCSV(filePath);
-    }
 
     private static void loadPreviousTeamFormation() {
         System.out.print("\nEnter team formation CSV file path: ");

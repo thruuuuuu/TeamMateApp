@@ -81,41 +81,6 @@ public class TeamManager {
         return hasRemaining;
     }
 
-    public void loadParticipantsFromCSV(String filePath) {
-        Logger.info("Loading participants from CSV: " + filePath);
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-
-        CSVLoaderThread loader = new CSVLoaderThread(filePath);
-        Future<List<Participant>> future = executor.submit(loader);
-
-        try {
-            List<Participant> loadedParticipants = future.get();
-
-            // Bulk insert into database
-            int insertedCount = ParticipantDAO.bulkInsertParticipants(loadedParticipants);
-
-            // Reload from database to get fresh data
-            participants.clear();
-            participants.addAll(ParticipantDAO.getAllParticipants());
-
-            Logger.info("Successfully loaded and inserted " + insertedCount + " participants from " + filePath);
-            System.out.println("\n✓ Successfully loaded " + insertedCount + " participants from " + filePath);
-            System.out.println("  All participants have been saved to the database.");
-
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            Logger.error("Error loading CSV: " + cause.getMessage(), (Exception) cause);
-            System.out.println("✗ Error: " + cause.getMessage());
-        } catch (InterruptedException e) {
-            Logger.error("CSV loading interrupted", e);
-            System.out.println("✗ Error: Loading was interrupted");
-            Thread.currentThread().interrupt();
-        } finally {
-            executor.shutdown();
-            Logger.debug("CSV loader executor shutdown");
-        }
-    }
-
     public void loadTeamFormationFromCSV(String filePath) {
         Logger.info("Loading team formation from CSV: " + filePath);
         System.out.println("\nLoading team formation from file...");
