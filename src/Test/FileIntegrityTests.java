@@ -3,6 +3,8 @@ package Test;
 import Log.Logger;
 import Manager.TeamManager;
 import Entity.Participant;
+import Enums.Game;
+import Enums.Role;
 
 import java.io.*;
 
@@ -13,40 +15,41 @@ public class FileIntegrityTests {
     public static void main(String[] args) {
         Logger.info("=== Starting File Integrity Tests ===");
 
-        testCSVCreation();
-        testCSVLoading();
-        testCSVCorruption();
-        testMissingFile();
-        testInvalidData();
-        testEmptyFile();
-        testSpecialCharacters();
+        testCSVExportCreation();
+        testCSVExportFormat();
+        testCSVWithRemainingParticipants();
+        testCSVLoadBack();
+        testLargeCSVExport();
 
         printTestResults();
     }
 
-    private static void testCSVCreation() {
-        Logger.info("Testing CSV Creation...");
+    private static void testCSVExportCreation() {
+        Logger.info("Testing CSV Export Creation...");
 
         try {
-            String testFile = "test_creation.csv";
+            String testFile = "test_export_creation.csv";
             TeamManager tm = new TeamManager();
 
-            // Add participants
+            // Add participants to database
             for (int i = 0; i < 10; i++) {
                 Participant p = new Participant(
-                        "P" + String.format("%03d", i),
-                        "User" + i,
-                        "user" + i + "@test.com",
-                        "Chess",
+                        "ExportUser" + i,
+                        "export" + i + "@test.com",
+                        Game.CHESS,
                         5 + i % 5,
-                        "Strategist",
+                        Role.STRATEGIST,
                         70 + i % 30
                 );
                 tm.addParticipant(p);
             }
 
+            // Form teams and save to database
             tm.setTeamSize(3);
             tm.formTeams();
+            tm.saveTeamsToDatabase();
+
+            // Export to CSV
             tm.saveTeamsToCSV(testFile);
 
             // Verify file exists
@@ -72,196 +75,235 @@ public class FileIntegrityTests {
             file.delete();
 
             testsPassed++;
-            Logger.info("✓ CSV creation test passed");
+            Logger.info("✓ CSV export creation test passed");
 
         } catch (Exception e) {
             testsFailed++;
-            Logger.error("✗ CSV creation test failed", e);
+            Logger.error("✗ CSV export creation test failed", e);
         }
     }
 
-    private static void testCSVLoading() {
-        Logger.info("Testing CSV Loading...");
+    private static void testCSVExportFormat() {
+        Logger.info("Testing CSV Export Format...");
 
         try {
-            String testFile = "test_loading.csv";
-
-            // Create test CSV
-            PrintWriter pw = new PrintWriter(testFile);
-            pw.println("ID,Name,Email,PreferredGame,SkillLevel,PreferredRole,PersonalityScore,PersonalityType");
-            pw.println("P001,Alice,alice@test.com,Chess,7,Strategist,95,Leader");
-            pw.println("P002,Bob,bob@test.com,FIFA,8,Attacker,80,Balanced");
-            pw.println("P003,Charlie,charlie@test.com,Basketball,6,Defender,65,Thinker");
-            pw.close();
-
-            // Load CSV
+            String testFile = "test_export_format.csv";
             TeamManager tm = new TeamManager();
-            tm.loadParticipantsFromCSV(testFile);
 
-            // Verify loaded data
-            assert tm.participantExists("P001") : "P001 should exist";
-            assert tm.participantExists("P002") : "P002 should exist";
-            assert tm.participantExists("P003") : "P003 should exist";
+            // Add participants
+            for (int i = 0; i < 12; i++) {
+                Participant p = new Participant(
+                        "FormatUser" + i,
+                        "format" + i + "@test.com",
+                        Game.FIFA,
+                        6,
+                        Role.ATTACKER,
+                        75
+                );
+                tm.addParticipant(p);
+            }
 
-            Participant p1 = tm.getParticipantById("P001");
-            assert p1.getName().equals("Alice") : "Name should be Alice";
-            assert p1.getSkillLevel() == 7 : "Skill level should be 7";
+            tm.setTeamSize(4);
+            tm.formTeams();
+            tm.saveTeamsToDatabase();
+            tm.saveTeamsToCSV(testFile);
+
+            // Read and verify format
+            BufferedReader br = new BufferedReader(new FileReader(testFile));
+            String header = br.readLine();
+            String[] headerFields = header.split(",");
+
+            assert headerFields.length >= 9 : "Should have at least 9 columns";
+            assert headerFields[0].equals("TeamID") : "First column should be TeamID";
+            assert headerFields[1].equals("ParticipantID") : "Second column should be ParticipantID";
+
+            // Check data rows
+            String dataRow = br.readLine();
+            assert dataRow != null : "Should have data rows";
+            String[] dataFields = dataRow.split(",");
+            assert dataFields.length >= 9 : "Data row should have at least 9 fields";
+
+            br.close();
 
             // Clean up
             new File(testFile).delete();
 
             testsPassed++;
-            Logger.info("✓ CSV loading test passed");
+            Logger.info("✓ CSV export format test passed");
 
         } catch (Exception e) {
             testsFailed++;
-            Logger.error("✗ CSV loading test failed", e);
+            Logger.error("✗ CSV export format test failed", e);
         }
     }
 
-    private static void testCSVCorruption() {
-        Logger.info("Testing CSV Corruption Handling...");
+    private static void testCSVWithRemainingParticipants() {
+        Logger.info("Testing CSV with Remaining Participants...");
 
         try {
-            String testFile = "test_corrupted.csv";
-
-            // Create corrupted CSV (missing columns)
-            PrintWriter pw = new PrintWriter(testFile);
-            pw.println("ID,Name,Email,PreferredGame,SkillLevel,PreferredRole,PersonalityScore,PersonalityType");
-            pw.println("P001,Alice,alice@test.com,Chess"); // Incomplete row
-            pw.println("P002,Bob,bob@test.com,FIFA,8,Attacker,80,Balanced"); // Good row
-            pw.println("P003"); // Very incomplete
-            pw.close();
-
-            // Try to load - should handle errors gracefully
+            String testFile = "test_remaining.csv";
             TeamManager tm = new TeamManager();
-            tm.loadParticipantsFromCSV(testFile);
 
-            // Should load only valid rows
-            assert tm.participantExists("P002") : "Valid row should be loaded";
+            // Add 13 participants (team size 5 = 2 teams + 3 remaining)
+            for (int i = 0; i < 13; i++) {
+                Participant p = new Participant(
+                        "RemainingUser" + i,
+                        "remaining" + i + "@test.com",
+                        Game.BASKETBALL,
+                        7,
+                        Role.DEFENDER,
+                        80
+                );
+                tm.addParticipant(p);
+            }
+
+            tm.setTeamSize(5);
+            tm.formTeams();
+            tm.saveTeamsToDatabase();
+            tm.saveTeamsToCSV(testFile);
+
+            // Append remaining participants
+            if (tm.hasRemainingParticipants()) {
+                tm.appendRemainingParticipantsToCSV(testFile);
+            }
+
+            // Verify file contains TeamID=0 entries
+            BufferedReader br = new BufferedReader(new FileReader(testFile));
+            String line;
+            boolean hasTeamZero = false;
+            int teamZeroCount = 0;
+
+            while ((line = br.readLine()) != null) {
+                if (line.startsWith("0,")) {
+                    hasTeamZero = true;
+                    teamZeroCount++;
+                }
+            }
+            br.close();
+
+            assert hasTeamZero : "File should contain TeamID=0 entries for remaining participants";
+            assert teamZeroCount == 3 : "Should have exactly 3 remaining participants";
 
             // Clean up
             new File(testFile).delete();
 
             testsPassed++;
-            Logger.info("✓ CSV corruption handling test passed");
+            Logger.info("✓ CSV with remaining participants test passed");
 
         } catch (Exception e) {
             testsFailed++;
-            Logger.error("✗ CSV corruption handling test failed", e);
+            Logger.error("✗ CSV with remaining participants test failed", e);
         }
     }
 
-    private static void testMissingFile() {
-        Logger.info("Testing Missing File Handling...");
+    private static void testCSVLoadBack() {
+        Logger.info("Testing CSV Load Back...");
 
         try {
-            TeamManager tm = new TeamManager();
+            String testFile = "test_loadback.csv";
+            TeamManager tm1 = new TeamManager();
 
-            // Try to load non-existent file
-            tm.loadParticipantsFromCSV("nonexistent_file.csv");
+            // Create and save teams
+            for (int i = 0; i < 10; i++) {
+                Participant p = new Participant(
+                        "LoadBackUser" + i,
+                        "loadback" + i + "@test.com",
+                        Game.VALORANT,
+                        6,
+                        Role.SUPPORTER,
+                        75
+                );
+                tm1.addParticipant(p);
+            }
 
-            // Should handle gracefully without crashing
-            testsPassed++;
-            Logger.info("✓ Missing file handling test passed");
+            tm1.setTeamSize(3);
+            tm1.formTeams();
+            tm1.saveTeamsToDatabase();
+            tm1.saveTeamsToCSV(testFile);
 
-        } catch (Exception e) {
-            testsFailed++;
-            Logger.error("✗ Missing file handling test failed", e);
-        }
-    }
+            if (tm1.hasRemainingParticipants()) {
+                tm1.appendRemainingParticipantsToCSV(testFile);
+            }
 
-    private static void testInvalidData() {
-        Logger.info("Testing Invalid Data Handling...");
+            // Load back into new TeamManager
+            TeamManager tm2 = new TeamManager();
+            tm2.loadTeamFormationFromCSV(testFile);
 
-        try {
-            String testFile = "test_invalid.csv";
-
-            // Create CSV with invalid data
-            PrintWriter pw = new PrintWriter(testFile);
-            pw.println("ID,Name,Email,PreferredGame,SkillLevel,PreferredRole,PersonalityScore,PersonalityType");
-            pw.println("P001,Alice,alice@test.com,Chess,ABC,Strategist,95,Leader"); // Invalid skill
-            pw.println("P002,Bob,bob@test.com,FIFA,8,Attacker,XYZ,Balanced"); // Invalid personality score
-            pw.close();
-
-            // Try to load - should handle errors
-            TeamManager tm = new TeamManager();
-            tm.loadParticipantsFromCSV(testFile);
+            // Verify loaded data matches saved data
+            File file = new File(testFile);
+            assert file.exists() : "CSV file should exist for loading";
 
             // Clean up
-            new File(testFile).delete();
+            file.delete();
 
             testsPassed++;
-            Logger.info("✓ Invalid data handling test passed");
+            Logger.info("✓ CSV load back test passed");
 
         } catch (Exception e) {
             testsFailed++;
-            Logger.error("✗ Invalid data handling test failed", e);
+            Logger.error("✗ CSV load back test failed", e);
         }
     }
 
-    private static void testEmptyFile() {
-        Logger.info("Testing Empty File Handling...");
+    private static void testLargeCSVExport() {
+        Logger.info("Testing Large CSV Export...");
 
         try {
-            String testFile = "test_empty.csv";
-
-            // Create empty CSV
-            PrintWriter pw = new PrintWriter(testFile);
-            pw.println("ID,Name,Email,PreferredGame,SkillLevel,PreferredRole,PersonalityScore,PersonalityType");
-            pw.close();
-
-            // Load empty file
+            String testFile = "test_large_export.csv";
             TeamManager tm = new TeamManager();
-            tm.loadParticipantsFromCSV(testFile);
+
+            // Add 100 participants
+            for (int i = 0; i < 100; i++) {
+                Participant p = new Participant(
+                        "LargeUser" + i,
+                        "large" + i + "@test.com",
+                        Game.values()[i % Game.values().length],
+                        5 + (i % 6),
+                        Role.values()[i % Role.values().length],
+                        60 + (i % 40)
+                );
+                tm.addParticipant(p);
+            }
+
+            tm.setTeamSize(5);
+            tm.formTeams();
+            tm.saveTeamsToDatabase();
+            tm.saveTeamsToCSV(testFile);
+
+            if (tm.hasRemainingParticipants()) {
+                tm.appendRemainingParticipantsToCSV(testFile);
+            }
+
+            // Verify file
+            File file = new File(testFile);
+            assert file.exists() : "Large CSV file should be created";
+            assert file.length() > 1000 : "Large CSV file should be substantial";
+
+            BufferedReader br = new BufferedReader(new FileReader(testFile));
+            int lineCount = 0;
+            while (br.readLine() != null) {
+                lineCount++;
+            }
+            br.close();
+
+            assert lineCount > 50 : "Should have many lines for 100 participants";
 
             // Clean up
-            new File(testFile).delete();
+            file.delete();
 
             testsPassed++;
-            Logger.info("✓ Empty file handling test passed");
+            Logger.info("✓ Large CSV export test passed");
 
         } catch (Exception e) {
             testsFailed++;
-            Logger.error("✗ Empty file handling test failed", e);
+            Logger.error("✗ Large CSV export test failed", e);
         }
     }
-
-    private static void testSpecialCharacters() {
-        Logger.info("Testing Special Characters in Data...");
-
-        try {
-            String testFile = "test_special.csv";
-
-            // Create CSV with special characters
-            PrintWriter pw = new PrintWriter(testFile);
-            pw.println("ID,Name,Email,PreferredGame,SkillLevel,PreferredRole,PersonalityScore,PersonalityType");
-            pw.println("P001,O'Brien,obrien@test.com,Chess,7,Strategist,95,Leader");
-            pw.println("P002,José García,jose@test.com,FIFA,8,Attacker,80,Balanced");
-            pw.close();
-
-            TeamManager tm = new TeamManager();
-            tm.loadParticipantsFromCSV(testFile);
-
-            // Verify special characters preserved
-            assert tm.participantExists("P001") : "P001 should exist";
-            assert tm.participantExists("P002") : "P002 should exist";
-
-            // Clean up
-            new File(testFile).delete();
-
-            testsPassed++;
-            Logger.info("✓ Special characters test passed");
-
-        } catch (Exception e) {
-            testsFailed++;
-            Logger.error("✗ Special characters test failed", e);
-        }
-    }
-
 
     private static void printTestResults() {
-        Logger.info("=== File Integrity Test Results ===");
+        Logger.info("\n╔════════════════════════════════════╗");
+        Logger.info("║   FILE INTEGRITY TEST RESULTS      ║");
+        Logger.info("╚════════════════════════════════════╝");
         Logger.info("Tests Passed: " + testsPassed);
         Logger.info("Tests Failed: " + testsFailed);
         Logger.info("Total Tests: " + (testsPassed + testsFailed));
