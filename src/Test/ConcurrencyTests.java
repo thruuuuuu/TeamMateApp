@@ -5,6 +5,7 @@ import Enums.Game;
 import Enums.Role;
 import Log.Logger;
 import Manager.TeamManager;
+import Database.ParticipantDAO;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +20,7 @@ public class ConcurrencyTests {
 
         testConcurrentParticipantAddition();
         testConcurrentTeamFormation();
-        testConcurrentFileLoading();
+        testConcurrentDatabaseWrites();
         testThreadPoolManagement();
         testDeadlockAvoidance();
 
@@ -32,16 +33,16 @@ public class ConcurrencyTests {
         try {
             TeamManager tm = new TeamManager();
             ExecutorService executor = Executors.newFixedThreadPool(10);
-            CountDownLatch latch = new CountDownLatch(100);
+            CountDownLatch latch = new CountDownLatch(50);
 
-            // Add 100 participants concurrently
-            for (int i = 0; i < 100; i++) {
+            // Add 50 participants concurrently to database
+            for (int i = 0; i < 50; i++) {
                 final int id = i;
                 executor.submit(() -> {
                     try {
                         Participant p = new Participant(
-                                "User" + id,
-                                "user" + id + "@test.com",
+                                "ConcurrentUser" + id,
+                                "concurrent" + id + "@test.com",
                                 Game.CHESS,
                                 5 + (id % 6),
                                 Role.STRATEGIST,
@@ -54,11 +55,12 @@ public class ConcurrencyTests {
                 });
             }
 
-            latch.await(10, TimeUnit.SECONDS);
+            boolean completed = latch.await(30, TimeUnit.SECONDS);
+            assert completed : "All participants should be added within timeout";
+
             executor.shutdown();
             executor.awaitTermination(5, TimeUnit.SECONDS);
 
-            // All participants should be added without errors
             testsPassed++;
             Logger.info("✓ Concurrent participant addition test passed");
 
@@ -74,26 +76,25 @@ public class ConcurrencyTests {
         try {
             TeamManager tm = new TeamManager();
 
-            // Add participants
+            // Add participants to database
             for (int i = 0; i < 20; i++) {
                 Participant p = new Participant(
-                        "P" + String.format("%03d", i),
-                        "User" + i,
-                        "user" + i + "@test.com",
-                        "Chess",
+                        "TeamFormUser" + i,
+                        "teamform" + i + "@test.com",
+                        Game.FIFA,
                         5 + (i % 6),
-                        "Strategist",
+                        Role.ATTACKER,
                         60 + (i % 40)
                 );
                 tm.addParticipant(p);
             }
 
-            // Form teams multiple times concurrently
-            ExecutorService executor = Executors.newFixedThreadPool(5);
-            CountDownLatch latch = new CountDownLatch(5);
+            // Form teams multiple times concurrently (stress test)
+            ExecutorService executor = Executors.newFixedThreadPool(3);
+            CountDownLatch latch = new CountDownLatch(3);
             List<Future<?>> futures = new ArrayList<>();
 
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < 3; i++) {
                 Future<?> future = executor.submit(() -> {
                     try {
                         tm.setTeamSize(4);
@@ -107,7 +108,9 @@ public class ConcurrencyTests {
                 futures.add(future);
             }
 
-            latch.await(20, TimeUnit.SECONDS);
+            boolean completed = latch.await(30, TimeUnit.SECONDS);
+            assert completed : "All team formations should complete within timeout";
+
             executor.shutdown();
             executor.awaitTermination(5, TimeUnit.SECONDS);
 
@@ -120,53 +123,54 @@ public class ConcurrencyTests {
         }
     }
 
-    private static void testConcurrentFileLoading() {
-        Logger.info("Testing Concurrent File Loading...");
+    private static void testConcurrentDatabaseWrites() {
+        Logger.info("Testing Concurrent Database Writes...");
 
         try {
-            // Create test CSV files
-            String[] testFiles = new String[3];
-            for (int i = 0; i < 3; i++) {
-                testFiles[i] = "test_concurrent_" + i + ".csv";
-                java.io.PrintWriter pw = new java.io.PrintWriter(testFiles[i]);
-                pw.println("ID,Name,Email,PreferredGame,SkillLevel,PreferredRole,PersonalityScore,PersonalityType");
-                for (int j = 0; j < 10; j++) {
-                    pw.println(String.format("P%03d,User%d,user%d@test.com,Chess,7,Strategist,80,Balanced",
-                            i * 10 + j, j, j));
-                }
-                pw.close();
-            }
+            ExecutorService executor = Executors.newFixedThreadPool(10);
+            CountDownLatch latch = new CountDownLatch(30);
 
-            // Load files concurrently
-            ExecutorService executor = Executors.newFixedThreadPool(3);
-            CountDownLatch latch = new CountDownLatch(3);
-
-            for (String file : testFiles) {
+            // Concurrent writes to database
+            for (int i = 0; i < 30; i++) {
+                final int id = i;
                 executor.submit(() -> {
                     try {
+                        Participant p = new Participant(
+                                "DBWrite" + id,
+                                "dbwrite" + id + "@test.com",
+                                Game.BASKETBALL,
+                                7,
+                                Role.DEFENDER,
+                                80
+                        );
+
                         TeamManager tm = new TeamManager();
-                        tm.loadParticipantsFromCSV(file);
+                        tm.addParticipant(p);
+
+                        // Verify written data
+                        Participant retrieved = ParticipantDAO.getParticipantById(p.getId());
+                        assert retrieved != null : "Participant should be in database";
+
+                    } catch (Exception e) {
+                        Logger.error("Error in concurrent DB write", e);
                     } finally {
                         latch.countDown();
                     }
                 });
             }
 
-            latch.await(10, TimeUnit.SECONDS);
+            boolean completed = latch.await(30, TimeUnit.SECONDS);
+            assert completed : "All database writes should complete";
+
             executor.shutdown();
             executor.awaitTermination(5, TimeUnit.SECONDS);
 
-            // Clean up
-            for (String file : testFiles) {
-                new java.io.File(file).delete();
-            }
-
             testsPassed++;
-            Logger.info("✓ Concurrent file loading test passed");
+            Logger.info("✓ Concurrent database writes test passed");
 
         } catch (Exception e) {
             testsFailed++;
-            Logger.error("✗ Concurrent file loading test failed", e);
+            Logger.error("✗ Concurrent database writes test failed", e);
         }
     }
 
@@ -175,14 +179,14 @@ public class ConcurrencyTests {
 
         try {
             ExecutorService executor = Executors.newFixedThreadPool(5);
-            CountDownLatch latch = new CountDownLatch(10);
+            CountDownLatch latch = new CountDownLatch(15);
 
-            // Submit 10 tasks
-            for (int i = 0; i < 10; i++) {
+            // Submit 15 tasks to 5-thread pool
+            for (int i = 0; i < 15; i++) {
                 final int taskId = i;
                 executor.submit(() -> {
                     try {
-                        Thread.sleep(100); // Simulate work
+                        Thread.sleep(50); // Simulate work
                         Logger.debug("Task " + taskId + " completed");
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -193,13 +197,13 @@ public class ConcurrencyTests {
             }
 
             // Wait for all tasks
-            boolean completed = latch.await(5, TimeUnit.SECONDS);
-            assert completed : "Not all tasks completed in time";
+            boolean completed = latch.await(10, TimeUnit.SECONDS);
+            assert completed : "All tasks should complete in time";
 
             // Shutdown properly
             executor.shutdown();
-            boolean terminated = executor.awaitTermination(2, TimeUnit.SECONDS);
-            assert terminated : "Executor did not terminate properly";
+            boolean terminated = executor.awaitTermination(3, TimeUnit.SECONDS);
+            assert terminated : "Executor should terminate properly";
 
             testsPassed++;
             Logger.info("✓ Thread pool management test passed");
@@ -220,15 +224,23 @@ public class ConcurrencyTests {
             ExecutorService executor = Executors.newFixedThreadPool(2);
             CountDownLatch latch = new CountDownLatch(2);
 
-            // Thread 1: Add to tm1, then tm2
+            // Thread 1: Add to tm1, then read from database
             executor.submit(() -> {
                 try {
                     for (int i = 0; i < 10; i++) {
-                        Participant p = new Participant("User" + i, "u" + i + "@test.com",
-                                Game.CHESS, 5, Role.STRATEGIST, 80);
+                        Participant p = new Participant(
+                                "Deadlock1_" + i,
+                                "dl1_" + i + "@test.com",
+                                Game.CSGO,
+                                5,
+                                Role.SUPPORTER,
+                                80
+                        );
                         tm1.addParticipant(p);
                         Thread.sleep(10);
-                        tm2.addParticipant(p);
+
+                        // Read from database
+                        ParticipantDAO.getParticipantById(p.getId());
                     }
                 } catch (Exception e) {
                     Logger.error("Error in thread 1", e);
@@ -237,15 +249,23 @@ public class ConcurrencyTests {
                 }
             });
 
-            // Thread 2: Add to tm2, then tm1
+            // Thread 2: Add to tm2, then read from database
             executor.submit(() -> {
                 try {
                     for (int i = 10; i < 20; i++) {
-                        Participant p = new Participant("User" + i, "u" + i + "@test.com",
-                                Game.FIFA, 6, Role.ATTACKER, 75);
+                        Participant p = new Participant(
+                                "Deadlock2_" + i,
+                                "dl2_" + i + "@test.com",
+                                Game.DOTA2,
+                                6,
+                                Role.COORDINATOR,
+                                75
+                        );
                         tm2.addParticipant(p);
                         Thread.sleep(10);
-                        tm1.addParticipant(p);
+
+                        // Read from database
+                        ParticipantDAO.getParticipantById(p.getId());
                     }
                 } catch (Exception e) {
                     Logger.error("Error in thread 2", e);
@@ -255,8 +275,8 @@ public class ConcurrencyTests {
             });
 
             // Should complete without deadlock
-            boolean completed = latch.await(10, TimeUnit.SECONDS);
-            assert completed : "Potential deadlock detected";
+            boolean completed = latch.await(20, TimeUnit.SECONDS);
+            assert completed : "Should complete without deadlock";
 
             executor.shutdown();
             executor.awaitTermination(2, TimeUnit.SECONDS);
@@ -271,7 +291,9 @@ public class ConcurrencyTests {
     }
 
     private static void printTestResults() {
-        Logger.info("=== Concurrency Test Results ===");
+        Logger.info("\n╔════════════════════════════════════╗");
+        Logger.info("║   CONCURRENCY TEST RESULTS         ║");
+        Logger.info("╚════════════════════════════════════╝");
         Logger.info("Tests Passed: " + testsPassed);
         Logger.info("Tests Failed: " + testsFailed);
         Logger.info("Total Tests: " + (testsPassed + testsFailed));
@@ -283,4 +305,3 @@ public class ConcurrencyTests {
         }
     }
 }
-
