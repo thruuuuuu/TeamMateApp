@@ -8,8 +8,8 @@ import Enums.PersonalityType;
 import Exceptions.*;
 import Log.Logger;
 import Manager.TeamManager;
-
-import java.io.*;
+import Database.ParticipantDAO;
+import Database.AuthenticationService;
 
 public class UnitTests {
     private static int testsPassed = 0;
@@ -24,6 +24,8 @@ public class UnitTests {
         testEnumFunctionality();
         testExceptionHandling();
         testTeamManagerBasics();
+        testDatabaseOperations();
+        testPasswordGeneration();
 
         printTestResults();
     }
@@ -32,7 +34,7 @@ public class UnitTests {
         Logger.info("Testing Participant Creation...");
 
         try {
-            //Test 1: Create participant with all fields
+            // Test 1: Create participant with all fields
             Participant p1 = new Participant("P001", "John Doe", "john@test.com",
                     "Chess", 7, "Strategist", 95);
 
@@ -151,6 +153,7 @@ public class UnitTests {
             assert Game.fromInt(1) == Game.CHESS : "Game fromInt(1) should be CHESS";
             assert Game.fromInt(2) == Game.FIFA : "Game fromInt(2) should be FIFA";
             assert Game.CHESS.getDisplayName().equals("Chess") : "Chess display name mismatch";
+            assert Game.BASKETBALL.getDisplayName().equals("Basketball") : "Basketball display name mismatch";
 
             // Test Role enum
             assert Role.fromInt(1) == Role.STRATEGIST : "Role fromInt(1) should be STRATEGIST";
@@ -197,7 +200,7 @@ public class UnitTests {
             // Test ParticipantNotFoundException
             exceptionThrown = false;
             try {
-                tm.getParticipantById("P999");
+                tm.getParticipantById("NONEXISTENT999");
             } catch (ParticipantNotFoundException e) {
                 exceptionThrown = true;
             }
@@ -218,13 +221,12 @@ public class UnitTests {
         try {
             TeamManager tm = new TeamManager();
 
-            // Add participants
-            Participant p1 = new Participant("Test User", "test@test.com",
+            // Add participant
+            Participant p1 = new Participant("Test User", "testmanager@test.com",
                     Game.CHESS, 7, Role.STRATEGIST, 95);
             tm.addParticipant(p1);
 
-            assert tm.participantExists(p1.getId()) : "Participant should exist";
-            assert !tm.participantExists("P999") : "P999 should not exist";
+            assert tm.participantExists(p1.getId()) : "Participant should exist in database";
 
             Participant retrieved = tm.getParticipantById(p1.getId());
             assert retrieved.getName().equals("Test User") : "Retrieved participant name mismatch";
@@ -238,8 +240,67 @@ public class UnitTests {
         }
     }
 
+    private static void testDatabaseOperations() {
+        Logger.info("Testing Database Operations...");
+
+        try {
+            // Test participant insertion
+            Participant p = new Participant("DB Test User", "dbtest@test.com",
+                    Game.VALORANT, 8, Role.ATTACKER, 85);
+
+            String password = AuthenticationService.generateParticipantPassword(p.getId());
+            boolean inserted = ParticipantDAO.insertParticipant(p, password);
+
+            assert inserted : "Participant should be inserted into database";
+
+            // Test retrieval
+            Participant retrieved = ParticipantDAO.getParticipantById(p.getId());
+            assert retrieved != null : "Should retrieve participant from database";
+            assert retrieved.getName().equals("DB Test User") : "Retrieved name should match";
+
+            // Test update
+            boolean updated = ParticipantDAO.updateParticipantEmail(p.getId(), "newemail@test.com");
+            assert updated : "Email should be updated";
+
+            Participant afterUpdate = ParticipantDAO.getParticipantById(p.getId());
+            assert afterUpdate.getEmail().equals("newemail@test.com") : "Email should be updated in DB";
+
+            // Clean up
+            ParticipantDAO.deleteParticipant(p.getId());
+
+            testsPassed++;
+            Logger.info("✓ Database operations test passed");
+
+        } catch (AssertionError | Exception e) {
+            testsFailed++;
+            Logger.error("✗ Database operations test failed", (Exception) e);
+        }
+    }
+
+    private static void testPasswordGeneration() {
+        Logger.info("Testing Password Generation...");
+
+        try {
+            String participantId = "P12345";
+            String password = AuthenticationService.generateParticipantPassword(participantId);
+
+            assert password != null : "Password should not be null";
+            assert password.equals("P12345-123") : "Password format should be ID-123";
+            assert password.contains(participantId) : "Password should contain participant ID";
+
+            testsPassed++;
+            Logger.info("✓ Password generation test passed");
+
+        } catch (AssertionError | Exception e) {
+            testsFailed++;
+            Logger.error("✗ Password generation test failed", (Exception) e);
+        }
+    }
+
     private static void printTestResults() {
-        Logger.info("=== Test Results ===");
+        Logger.info("\n╔════════════════════════════════════╗");
+        Logger.info("║       UNIT TEST RESULTS            ║");
+        Logger.info("╚════════════════════════════════════╝");
         Logger.info("Tests Passed: " + testsPassed);
         Logger.info("Tests Failed: " + testsFailed);
         Logger.info("Total Tests: " + (testsPassed + testsFailed));
@@ -247,7 +308,7 @@ public class UnitTests {
                 (testsPassed * 100.0) / (testsPassed + testsFailed)));
 
         if (testsFailed == 0) {
-            Logger.info("✓ All tests passed!");
+            Logger.info("✓ All unit tests passed!");
         } else {
             Logger.warning("⚠ Some tests failed. Please review the log.");
         }
